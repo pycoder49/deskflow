@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+/build
+/.svelte-kit
+/package
+dist/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Vite artifacts
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Rust / Cargo
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.idea/
+*.swp
+*.swo
+*.bak
+
+# Claude Code — local user settings (permissions, personal overrides)
+.claude/settings.local.json
+
+# Logs
+*.log
+
+# Personal / session files
+notepad.md
+hot.md
+BUILD_NOTES.md

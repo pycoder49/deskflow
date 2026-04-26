@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant space (&:where(.space, .space *));
+
+@theme {
+  --font-sans: Arial, "Helvetica Neue", Helvetica, sans-serif;
+  --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+
+  --color-base: #fafaf8;
+  --color-surface: #ffffff;
+  --color-ink: #1f1f1f;
+  --color-mute: #6b6b6b;
+  --color-line: #e8e6e0;
+  --color-accent: #4a6b7c;
+}
+
+.dark {
+  --color-base: #15171a;
+  --color-surface: #1e2024;
+  --color-ink: #e8e6e1;
+  --color-mute: #8a8a8a;
+  --color-line: #2d3036;
+  --color-accent: #7a9cb0;
+}
+
+.space {
+  --color-base: #06070c;
+  --color-surface: #0e1019;
+  --color-ink: #e1e4ed;
+  --color-mute: #7a7e8c;
+  --color-line: #1a1d2a;
+  --color-accent: #9b8eff;
+}
+
+html,
+body {
+  background: var(--color-base);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+body {
+  min-height: 100vh;
+}
+
+/* Space theme starfield is handled by SpaceBackground.svelte (SVG, fixed layer).
+   Only color variables are needed here. */
+
+/* Slim, themed scrollbars — only show on hover so they don't compete visually. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+*:hover {
+  scrollbar-color: var(--color-line) transparent;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+*:hover::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-mute);
+}
