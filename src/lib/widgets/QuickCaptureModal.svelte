@@ -85,54 +85,56 @@
         disabled={saving}
       />
 
-      <div class="flex flex-wrap items-center gap-3 text-sm">
-        <select
-          class="bg-surface border border-line rounded px-2 py-1 text-ink"
-          bind:value={listId}
-          aria-label="List"
-          disabled={saving}
-        >
-          {#each LISTS as list}
-            <option value={list.id}>{list.label}</option>
-          {/each}
-        </select>
-
-        {#if isDaily}
+      <div class="flex flex-col gap-3">
+        <div class="flex flex-wrap gap-3 text-sm">
           <select
             class="bg-surface border border-line rounded px-2 py-1 text-ink"
-            bind:value={areaSlug}
-            aria-label="Area"
+            bind:value={listId}
+            aria-label="List"
             disabled={saving}
           >
-            {#each AREAS as area}
-              <option value={area.slug}>{area.label}</option>
+            {#each LISTS as list}
+              <option value={list.id}>{list.label}</option>
             {/each}
           </select>
-        {/if}
 
-        <select
-          class="bg-surface border border-line rounded px-2 py-1 text-ink"
-          bind:value={priority}
-          aria-label="Priority"
-          disabled={saving}
-        >
-          <option value={1}>Urgent</option>
-          <option value={2}>High</option>
-          <option value={3}>Normal</option>
-        </select>
+          {#if isDaily}
+            <select
+              class="bg-surface border border-line rounded px-2 py-1 text-ink"
+              bind:value={areaSlug}
+              aria-label="Area"
+              disabled={saving}
+            >
+              {#each AREAS as area}
+                <option value={area.slug}>{area.label}</option>
+              {/each}
+            </select>
+          {/if}
 
-        <div class="flex-1"></div>
+          <select
+            class="bg-surface border border-line rounded px-2 py-1 text-ink"
+            bind:value={priority}
+            aria-label="Priority"
+            disabled={saving}
+          >
+            <option value={1}>Urgent</option>
+            <option value={2}>High</option>
+            <option value={3}>Normal</option>
+          </select>
+        </div>
 
-        <button class="text-mute hover:text-ink text-sm" onclick={close} disabled={saving}>
-          Cancel
-        </button>
-        <button
-          class="bg-accent text-white px-3 py-1 rounded text-sm disabled:opacity-50"
-          onclick={save}
-          disabled={!title.trim() || saving}
-        >
-          {saving ? 'Saving…' : 'Save'}
-        </button>
+        <div class="flex justify-end items-center gap-3 text-sm">
+          <button class="text-mute hover:text-ink" onclick={close} disabled={saving}>
+            Cancel
+          </button>
+          <button
+            class="bg-accent text-white px-3 py-1 rounded disabled:opacity-50"
+            onclick={save}
+            disabled={!title.trim() || saving}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
       </div>
 
       <p class="text-xs text-mute mt-3">Ctrl+Enter to save · Esc to dismiss</p>

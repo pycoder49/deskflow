@@ -1,6 +1,6 @@
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::SystemTime;
 
@@ -51,6 +51,25 @@ pub struct HotSection {
     pub body: String,  // raw markdown body (bullets or prose)
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GraphNode {
+    pub id: String,        // "sources/my-source"
+    pub label: String,     // display name (dashes → spaces)
+    pub node_type: String, // "source" | "topic" | "entity" | "query"
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GraphEdge {
+    pub source: String,
+    pub target: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GraphData {
+    pub nodes: Vec<GraphNode>,
+    pub edges: Vec<GraphEdge>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VaultPulse {
     pub vault_name: String,
@@ -60,6 +79,7 @@ pub struct VaultPulse {
     pub counts: VaultCounts,
     pub inbox: Vec<InboxItem>,
     pub recent_log: Vec<LogDay>,
+    pub graph: GraphData,
 }
 
 // ─── Parsers ────────────────────────────────────────────────────────────────
@@ -252,6 +272,103 @@ fn build_inbox() -> Vec<InboxItem> {
     items.into_iter().map(|(i, _)| i).collect()
 }
 
+// ─── Graph ──────────────────────────────────────────────────────────────────
+
+fn extract_wikilinks(content: &str) -> Vec<String> {
+    let mut links = Vec::new();
+    let mut pos = 0;
+    while let Some(open) = content[pos..].find("[[") {
+        let inner_start = pos + open + 2;
+        let Some(close_offset) = content[inner_start..].find("]]") else { break };
+        let inner = &content[inner_start..inner_start + close_offset];
+        let target = inner.split('|').next().unwrap_or(inner);
+        let target = target.split('#').next().unwrap_or(target).trim();
+        if !target.is_empty() {
+            links.push(target.to_string());
+        }
+        pos = inner_start + close_offset + 2;
+    }
+    links
+}
+
+fn build_graph() -> GraphData {
+    let vault = vault_path();
+    let wiki = vault.join("wiki");
+
+    // (scan_root, subdir_prefix_in_id, node_type)
+    // wiki dirs use "wiki/<dir>/<stem>" ids; raw dirs use "raw/<dir>/<stem>"
+    struct DirSpec {
+        path: std::path::PathBuf,
+        id_prefix: String,
+        node_type: String,
+    }
+
+    let specs: Vec<DirSpec> = vec![
+        DirSpec { path: wiki.join("sources"),  id_prefix: "sources".into(),  node_type: "source".into() },
+        DirSpec { path: wiki.join("topics"),   id_prefix: "topics".into(),   node_type: "topic".into() },
+        DirSpec { path: wiki.join("entities"), id_prefix: "entities".into(), node_type: "entity".into() },
+        DirSpec { path: wiki.join("queries"),  id_prefix: "queries".into(),  node_type: "query".into() },
+        // root-level topics/ (orphaned files like rag-architecture.md)
+        DirSpec { path: vault.join("topics"),  id_prefix: "root-topics".into(), node_type: "topic".into() },
+        // uningested raw files
+        DirSpec { path: vault.join("raw/notes"), id_prefix: "raw-notes".into(), node_type: "raw".into() },
+        DirSpec { path: vault.join("raw/clips"), id_prefix: "raw-clips".into(), node_type: "raw".into() },
+    ];
+
+    let mut nodes: Vec<GraphNode> = Vec::new();
+    let mut stem_to_id: HashMap<String, String> = HashMap::new();
+
+    for spec in &specs {
+        let Ok(entries) = std::fs::read_dir(&spec.path) else { continue };
+        let mut sorted: Vec<_> = entries.flatten().collect();
+        sorted.sort_by_key(|e| e.file_name());
+        for entry in sorted {
+            let p = entry.path();
+            if p.extension().and_then(|e| e.to_str()) != Some("md") { continue }
+            let Some(stem) = p.file_stem().and_then(|s| s.to_str()) else { continue };
+            let id = format!("{}/{}", spec.id_prefix, stem);
+            let label = stem.replace('-', " ").replace('_', " ");
+            stem_to_id.entry(stem.to_lowercase()).or_insert_with(|| id.clone());
+            nodes.push(GraphNode { id, label, node_type: spec.node_type.clone() });
+        }
+    }
+
+    let node_ids: HashSet<String> = nodes.iter().map(|n| n.id.clone()).collect();
+    let mut edge_set: HashSet<(String, String)> = HashSet::new();
+
+    for spec in &specs {
+        let Ok(entries) = std::fs::read_dir(&spec.path) else { continue };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.extension().and_then(|e| e.to_str()) != Some("md") { continue }
+            let Some(stem) = p.file_stem().and_then(|s| s.to_str()) else { continue };
+            let source_id = format!("{}/{}", spec.id_prefix, stem);
+            let Ok(content) = std::fs::read_to_string(&p) else { continue };
+
+            for link in extract_wikilinks(&content) {
+                let lower = link.to_lowercase();
+                let target_id = stem_to_id.get(&lower).cloned().or_else(|| {
+                    let stem_part = lower.split('/').last().unwrap_or(&lower).to_string();
+                    stem_to_id.get(&stem_part).cloned()
+                });
+                if let Some(tid) = target_id {
+                    if tid != source_id && node_ids.contains(&tid) {
+                        edge_set.insert((source_id.clone(), tid));
+                    }
+                }
+            }
+        }
+    }
+
+    let mut edges: Vec<GraphEdge> = edge_set
+        .into_iter()
+        .map(|(s, t)| GraphEdge { source: s, target: t })
+        .collect();
+    edges.sort_by(|a, b| a.source.cmp(&b.source).then(a.target.cmp(&b.target)));
+
+    GraphData { nodes, edges }
+}
+
 // ─── Command ────────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -269,5 +386,6 @@ pub async fn get_vault_pulse() -> Result<VaultPulse, String> {
         counts: parse_counts(&index),
         inbox: build_inbox(),
         recent_log: parse_log(&log, 5),
+        graph: build_graph(),
     })
 }

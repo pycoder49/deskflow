@@ -1,7 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { openUrl } from '@tauri-apps/plugin-opener';
-  import { getVaultPulse, obsidianUri, type VaultPulse } from '$lib/services/vault';
+  import {
+    forceSimulation,
+    forceLink,
+    forceManyBody,
+    forceCenter,
+    forceCollide,
+    forceX,
+    forceY,
+    type SimulationNodeDatum,
+  } from 'd3-force';
+  import { getVaultPulse, obsidianUri, type VaultPulse, type GraphNode } from '$lib/services/vault';
 
   type View = 'hot' | 'inbox' | 'graph';
 
@@ -9,6 +19,137 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let view = $state<View>('hot');
+
+  // ─── Graph simulation ───────────────────────────────────────────────────────
+  type SimNode = SimulationNodeDatum & GraphNode;
+
+  let graphDiv = $state<HTMLDivElement | null>(null);
+  let simNodes = $state<SimNode[]>([]);
+  let simEdges = $state<Array<{ sx: number; sy: number; tx: number; ty: number }>>([]);
+
+  // ─── Pan / zoom / drag ──────────────────────────────────────────────────────
+  let svgEl = $state<SVGSVGElement | null>(null);
+  let vt = $state({ x: 0, y: 0, k: 1 });
+  let isPanning = $state(false);
+  let isDragging = $state(false);
+  let panOrigin = { x: 0, y: 0 };
+  let dragNode: SimNode | null = null;
+  let activeSim: ReturnType<typeof forceSimulation<SimNode>> | null = null;
+  let activeNodes: SimNode[] = [];
+
+  function toLocal(cx: number, cy: number) {
+    const rect = svgEl!.getBoundingClientRect();
+    return { x: (cx - rect.left - vt.x) / vt.k, y: (cy - rect.top - vt.y) / vt.k };
+  }
+
+  function onWheel(e: WheelEvent) {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    const newK = Math.max(0.15, Math.min(6, vt.k * factor));
+    const rect = svgEl!.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    vt = { x: mx + (vt.x - mx) * (newK / vt.k), y: my + (vt.y - my) * (newK / vt.k), k: newK };
+  }
+
+  function onSvgDown(e: PointerEvent) {
+    if ((e.target as Element).closest('.gnode')) return;
+    isPanning = true;
+    panOrigin = { x: e.clientX - vt.x, y: e.clientY - vt.y };
+    (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId);
+  }
+
+  function onSvgMove(e: PointerEvent) {
+    if (isPanning) {
+      vt = { ...vt, x: e.clientX - panOrigin.x, y: e.clientY - panOrigin.y };
+    } else if (dragNode) {
+      const { x, y } = toLocal(e.clientX, e.clientY);
+      dragNode.fx = x;
+      dragNode.fy = y;
+      dragNode.x = x;
+      dragNode.y = y;
+      simNodes = activeNodes.map(n => ({ ...n }));
+    }
+  }
+
+  function onSvgUp() {
+    isPanning = false;
+    if (dragNode) {
+      // keep fx/fy set — node stays pinned where dropped (Obsidian-style)
+      activeSim?.alphaTarget(0);
+      dragNode = null;
+      isDragging = false;
+    }
+  }
+
+  function onNodeDown(e: PointerEvent, nodeId: string) {
+    e.stopPropagation();
+    const node = activeNodes.find(n => n.id === nodeId);
+    if (!node) return;
+    dragNode = node;
+    isDragging = true;
+    node.fx = node.x;
+    node.fy = node.y;
+    activeSim?.alphaTarget(0.3).restart();
+    (e.currentTarget as SVGGElement).setPointerCapture(e.pointerId);
+  }
+
+  const NODE_TYPES = ['source', 'topic', 'entity', 'query', 'raw'] as const;
+  function nodeColor(t: string) { return `var(--node-${t}-color, #94a3b8)`; }
+
+  $effect(() => {
+    if (view !== 'graph' || !pulse?.graph || !graphDiv) return;
+    const { width: W, height: H } = graphDiv.getBoundingClientRect();
+    if (!W || !H) return;
+
+    const nodes: SimNode[] = pulse.graph.nodes.map(n => ({
+      ...n,
+      x: W / 2 + (Math.random() - 0.5) * W * 0.4,
+      y: H / 2 + (Math.random() - 0.5) * H * 0.4,
+    }));
+    const idSet = new Set(nodes.map(n => n.id));
+    const rawLinks = pulse.graph.edges
+      .filter(e => idSet.has(e.source) && idSet.has(e.target))
+      .map(e => ({ source: e.source, target: e.target }));
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const linkForce = (forceLink(rawLinks) as any)
+      .id((d: SimNode) => d.id)
+      .distance(70)
+      .strength(0.5);
+
+    // Nodes that appear in at least one edge
+    const connectedIds = new Set<string>(
+      rawLinks.flatMap((l: { source: string; target: string }) => [l.source, l.target])
+    );
+    const isOrphan = (n: SimNode) => !connectedIds.has(n.id);
+
+    const sim = forceSimulation<SimNode>(nodes)
+      .force('link', linkForce)
+      .force('charge', forceManyBody<SimNode>().strength(-130))
+      .force('center', forceCenter(W / 2, H / 2))
+      .force('collision', forceCollide<SimNode>(20))
+      // Pull orphan nodes toward center so they don't drift to the edges
+      .force('orphan-x', forceX<SimNode>(W / 2).strength(n => isOrphan(n) ? 0.2 : 0))
+      .force('orphan-y', forceY<SimNode>(H / 2).strength(n => isOrphan(n) ? 0.2 : 0))
+      .alphaDecay(0.025);
+
+    activeSim = sim;
+    activeNodes = nodes;
+
+    function flush() {
+      simNodes = nodes.map(n => ({ ...n }));
+      simEdges = linkForce.links().map((l: any) => ({
+        sx: (l.source as SimNode).x ?? 0,
+        sy: (l.source as SimNode).y ?? 0,
+        tx: (l.target as SimNode).x ?? 0,
+        ty: (l.target as SimNode).y ?? 0,
+      }));
+    }
+    sim.on('tick', flush).on('end', flush);
+
+    return () => { sim.stop(); activeSim = null; activeNodes = []; };
+  });
 
   async function load() {
     loading = true;
@@ -184,10 +325,62 @@
         </div>
       {/if}
 
-    <!-- ─── GRAPH TAB (placeholder) ──────────────────────────── -->
+    <!-- ─── GRAPH TAB ────────────────────────────────────────── -->
     {:else if view === 'graph'}
-      <div class="flex-1 min-h-0 flex items-center justify-center text-mute italic text-sm">
-        Coming soon
+      <div class="flex-1 min-h-0 relative overflow-hidden rounded-lg border border-line" bind:this={graphDiv}>
+        {#if !pulse.graph || pulse.graph.nodes.length === 0}
+          <div class="absolute inset-0 flex items-center justify-center text-mute italic text-sm">
+            No graph data
+          </div>
+        {:else}
+          <svg
+            class="w-full h-full select-none"
+            class:cursor-grab={!isPanning && !isDragging}
+            class:cursor-grabbing={isPanning || isDragging}
+            bind:this={svgEl}
+            onwheel={onWheel}
+            onpointerdown={onSvgDown}
+            onpointermove={onSvgMove}
+            onpointerup={onSvgUp}
+          >
+            <g transform="translate({vt.x},{vt.y}) scale({vt.k})">
+              {#each simEdges as edge, i (i)}
+                <line
+                  x1={edge.sx} y1={edge.sy}
+                  x2={edge.tx} y2={edge.ty}
+                  stroke="currentColor"
+                  stroke-width="1"
+                  stroke-opacity="0.18"
+                />
+              {/each}
+              {#each simNodes as node (node.id)}
+                <g
+                  class="gnode"
+                  transform="translate({node.x ?? 0},{node.y ?? 0})"
+                  onpointerdown={(e) => onNodeDown(e, node.id)}
+                >
+                  <circle r="6" style="fill:{nodeColor(node.node_type)}" fill-opacity="0.88" />
+                  <text
+                    y="16"
+                    text-anchor="middle"
+                    font-size="8"
+                    fill="currentColor"
+                    fill-opacity="0.6"
+                    class="pointer-events-none"
+                  >{node.label.length > 14 ? node.label.slice(0, 13) + '…' : node.label}</text>
+                </g>
+              {/each}
+            </g>
+          </svg>
+          <div class="absolute bottom-2 right-2 flex gap-2.5">
+            {#each NODE_TYPES as type}
+              <div class="flex items-center gap-1 text-[9px] text-mute">
+                <span class="w-2 h-2 rounded-full shrink-0" style="background:{nodeColor(type)}"></span>
+                {type}
+              </div>
+            {/each}
+          </div>
+        {/if}
       </div>
     {/if}
   {/if}
@@ -198,6 +391,23 @@
   .vault-root { --vault-accent: #b87333; }
   :global(.dark) .vault-root,
   :global(.space) .vault-root { --vault-accent: #a78bfa; }
+
+  /* Graph node colors — darker in light mode for contrast on white bg */
+  .vault-root {
+    --node-source-color: #b45309;
+    --node-topic-color:  #1d4ed8;
+    --node-entity-color: #059669;
+    --node-query-color:  #dc2626;
+    --node-raw-color:    #64748b;
+  }
+  :global(.dark) .vault-root,
+  :global(.space) .vault-root {
+    --node-source-color: #f59e0b;
+    --node-topic-color:  #60a5fa;
+    --node-entity-color: #34d399;
+    --node-query-color:  #f87171;
+    --node-raw-color:    #94a3b8;
+  }
 
   .vault-label { color: var(--vault-accent); }
 

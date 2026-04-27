@@ -24,6 +24,22 @@ export interface HotSection {
   body: string;
 }
 
+export interface GraphNode {
+  id: string;        // "sources/my-source"
+  label: string;
+  node_type: string; // "source" | "topic" | "entity" | "query" | "raw"
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+}
+
+export interface GraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
 export interface VaultPulse {
   vault_name: string;
   hot_sections: HotSection[];
@@ -32,6 +48,7 @@ export interface VaultPulse {
   counts: VaultCounts;
   inbox: InboxItem[];
   recent_log: LogDay[];
+  graph: GraphData;
 }
 
 export const getVaultPulse = () => invoke<VaultPulse>('get_vault_pulse');

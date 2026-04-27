@@ -175,18 +175,18 @@
           </button>
 
           {#if task.tags.length > 0}
-            <div
-              class="tag-strip flex items-center gap-1 max-w-[8rem] overflow-x-auto flex-shrink-0
-                     {done_ ? 'opacity-30 saturate-[.35]' : ''}"
-            >
-              {#each task.tags as tag}
-                {@const bg = tag.tag_bg ?? '#6b7280'}
-                <span
-                  class="px-1.5 py-0.5 text-[11px] rounded font-medium whitespace-nowrap"
-                  style="background:{bg};color:{readableText(bg)}"
-                  title={tag.name}
-                >{tag.name}</span>
-              {/each}
+            {@const firstTag = task.tags[0]}
+            {@const overflow = task.tags.length - 1}
+            {@const bg = firstTag.tag_bg ?? '#6b7280'}
+            <div class="flex items-center gap-1 flex-shrink-0 {done_ ? 'opacity-30 saturate-[.35]' : ''}">
+              <span
+                class="px-1.5 py-0.5 text-[11px] rounded font-medium whitespace-nowrap max-w-[6rem] truncate"
+                style="background:{bg};color:{readableText(bg)}"
+                title={task.tags.map((t) => t.name).join(', ')}
+              >{firstTag.name}</span>
+              {#if overflow > 0}
+                <span class="text-[10px] text-mute" title={task.tags.slice(1).map((t) => t.name).join(', ')}>+{overflow}</span>
+              {/if}
             </div>
           {/if}
 
@@ -204,19 +204,3 @@
   {/if}
 </div>
 
-<style>
-  .tag-strip {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(127, 127, 127, 0.35) transparent;
-  }
-  .tag-strip::-webkit-scrollbar {
-    height: 3px;
-  }
-  .tag-strip::-webkit-scrollbar-thumb {
-    background: rgba(127, 127, 127, 0.35);
-    border-radius: 2px;
-  }
-  .tag-strip::-webkit-scrollbar-track {
-    background: transparent;
-  }
-</style>

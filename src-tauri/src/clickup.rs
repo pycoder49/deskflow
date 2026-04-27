@@ -105,6 +105,51 @@ fn extract_json(s: &str) -> &str {
     s
 }
 
+fn format_calendar_context(events: &[crate::calendar::CalendarEvent]) -> String {
+    use chrono::Timelike;
+    let now = chrono::Local::now();
+    let now_min = now.hour() * 60 + now.minute();
+
+    let lines: Vec<String> = events
+        .iter()
+        .filter(|e| !e.all_day && !e.start_time.is_empty())
+        .filter_map(|e| {
+            let parts: Vec<u32> =
+                e.start_time.split(':').filter_map(|x| x.parse().ok()).collect();
+            if parts.len() < 2 {
+                return None;
+            }
+            let event_min = parts[0] * 60 + parts[1];
+            if event_min <= now_min {
+                return None;
+            }
+            let until = event_min - now_min;
+            Some(format!(
+                "- {} – {} {} (in {}min)",
+                e.start_time, e.end_time, e.title, until
+            ))
+        })
+        .collect();
+
+    if lines.is_empty() {
+        "No upcoming timed events today.".to_string()
+    } else {
+        lines.join("\n")
+    }
+}
+
+async fn fetch_today_calendar_context() -> String {
+    let base = chrono::Local::now() - chrono::Duration::hours(4);
+    let today = base.format("%Y-%m-%d").to_string();
+    let tomorrow = (base + chrono::Duration::days(1))
+        .format("%Y-%m-%d")
+        .to_string();
+    match crate::calendar::fetch_events(&today, &tomorrow).await {
+        Ok(evs) => format_calendar_context(&evs),
+        Err(_) => "Calendar unavailable.".to_string(),
+    }
+}
+
 async fn call_claude_cli(prompt: &str) -> Result<String, String> {
     use tokio::io::AsyncWriteExt;
     use tokio::process::Command;
@@ -264,6 +309,8 @@ pub async fn get_now_next(preserve_now: bool) -> Result<NowNextResult, String> {
     let task_map: std::collections::HashMap<String, Task> =
         tasks.iter().cloned().map(|t| (t.id.clone(), t)).collect();
 
+    let cal_context = fetch_today_calendar_context().await;
+
     if preserve_now {
         if let Some(now_task) = cached_now.as_ref() {
             if task_map.contains_key(&now_task.id) {
@@ -279,7 +326,7 @@ pub async fn get_now_next(preserve_now: bool) -> Result<NowNextResult, String> {
                 let next: Vec<Task> = if remaining.is_empty() {
                     vec![]
                 } else {
-                    let ids = claude_pick_next(&remaining, &now_task.name).await?;
+                    let ids = claude_pick_next(&remaining, &now_task.name, &cal_context).await?;
                     ids.into_iter()
                         .filter_map(|id| task_map.get(&id).cloned())
                         .take(2)
@@ -293,7 +340,7 @@ pub async fn get_now_next(preserve_now: bool) -> Result<NowNextResult, String> {
     }
 
     eprintln!("[NowNext] cache MISS — full pick ({} tasks)", pool_key.len());
-    let selection = claude_pick_full(&tasks).await?;
+    let selection = claude_pick_full(&tasks, &cal_context).await?;
 
     let now = selection
         .now
@@ -326,10 +373,14 @@ fn format_task_line(t: &Task) -> String {
     format!("{} | p{} | {} | {}", t.id, priority, estimate, t.name)
 }
 
-async fn claude_pick_full(tasks: &[Task]) -> Result<ClaudeSelection, String> {
+async fn claude_pick_full(tasks: &[Task], cal_context: &str) -> Result<ClaudeSelection, String> {
+    use chrono::Timelike;
+    let now = chrono::Local::now();
+    let now_str = format!("{:02}:{:02}", now.hour(), now.minute());
+
     let task_lines: Vec<String> = tasks.iter().map(format_task_line).collect();
     let prompt = format!(
-        "Pick tasks to focus on right now. Format: id | priority(1=urgent,4=low) | estimate | name\n\n{}\n\nReturn ONLY a JSON object, no explanation:\n{{\"now\":\"task_id\",\"next\":[\"id1\",\"id2\"]}}\n\nPick 1 task for \"now\" (most urgent/important). Pick up to 2 for \"next\". Use null for \"now\" only if all tasks are trivial.",
+        "Pick tasks to focus on right now.\n\nCurrent time: {now_str}\nUpcoming calendar events:\n{cal_context}\n\nTasks (id | priority(1=urgent,4=low) | estimate | name):\n{}\n\nIMPORTANT: Do not pick a task whose estimate would run past the next meeting. Prefer shorter tasks when a meeting is soon.\nReturn ONLY a JSON object, no explanation:\n{{\"now\":\"task_id\",\"next\":[\"id1\",\"id2\"]}}\n\nPick 1 for \"now\" (most urgent/important, fits before next meeting). Up to 2 for \"next\". Use null for \"now\" only if all tasks are trivial.",
         task_lines.join("\n")
     );
     let text = call_claude_cli(&prompt).await?;
@@ -337,10 +388,14 @@ async fn claude_pick_full(tasks: &[Task]) -> Result<ClaudeSelection, String> {
         .map_err(|e| format!("Claude returned invalid JSON: {e}\nRaw: {text}"))
 }
 
-async fn claude_pick_next(pool: &[Task], now_name: &str) -> Result<Vec<String>, String> {
+async fn claude_pick_next(pool: &[Task], now_name: &str, cal_context: &str) -> Result<Vec<String>, String> {
+    use chrono::Timelike;
+    let now = chrono::Local::now();
+    let now_str = format!("{:02}:{:02}", now.hour(), now.minute());
+
     let task_lines: Vec<String> = pool.iter().map(format_task_line).collect();
     let prompt = format!(
-        "The user is currently focused on: \"{now_name}\". Pick up to 2 tasks to do NEXT from this list. Format: id | priority(1=urgent,4=low) | estimate | name\n\n{}\n\nReturn ONLY a JSON object, no explanation:\n{{\"next\":[\"id1\",\"id2\"]}}",
+        "Current time: {now_str}\nUpcoming calendar events:\n{cal_context}\n\nThe user is currently focused on: \"{now_name}\". Pick up to 2 tasks to do NEXT from this list. Prefer tasks whose estimates fit in available time before the next meeting.\n\nTasks (id | priority(1=urgent,4=low) | estimate | name):\n{}\n\nReturn ONLY a JSON object, no explanation:\n{{\"next\":[\"id1\",\"id2\"]}}",
         task_lines.join("\n")
     );
     let text = call_claude_cli(&prompt).await?;

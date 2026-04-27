@@ -108,9 +108,9 @@
   {:else}
     {#if now}
       {@const task = now}
-      <div class="mb-4">
-        <p class="text-[10px] uppercase tracking-widest text-accent mb-1.5">Now</p>
-        <div class="border border-accent/30 bg-accent/5 rounded-lg p-3 flex items-start gap-2.5">
+      <div class="mb-3">
+        <p class="text-[10px] uppercase tracking-widest text-accent mb-1">Now</p>
+        <div class="border border-accent/30 bg-accent/5 rounded-lg p-2.5 flex items-start gap-2">
           <button
             class="mt-0.5 w-4 h-4 rounded border border-accent/50 flex-shrink-0 hover:bg-accent/20 transition flex items-center justify-center"
             class:opacity-50={completing === task.id}
@@ -124,18 +124,16 @@
               ></span>
             {/if}
           </button>
-          <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-1 min-w-0">
+            <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:{priorityColor(task)}"></span>
             <button
-              class="text-sm font-medium text-ink text-left w-full truncate hover:text-accent transition block"
+              class="text-sm font-semibold text-ink text-left flex-1 min-w-0 truncate hover:text-accent transition"
               onclick={() => task.url && openUrl(task.url)}
               title={task.name}
             >{task.name}</button>
-            <div class="flex items-center gap-2 mt-0.5">
-              <span class="w-1.5 h-1.5 rounded-full" style="background:{priorityColor(task)}"></span>
-              {#if estimateLabel(task)}
-                <span class="text-[10px] text-mute">{estimateLabel(task)}</span>
-              {/if}
-            </div>
+            {#if estimateLabel(task)}
+              <span class="text-xs text-mute flex-shrink-0">{estimateLabel(task)}</span>
+            {/if}
           </div>
         </div>
       </div>
@@ -143,7 +141,7 @@
 
     {#if next.length > 0}
       <p class="text-[10px] uppercase tracking-widest text-mute mb-1.5">Next</p>
-      <ul class="space-y-1.5">
+      <ul class="space-y-2.5">
         {#each next as task (task.id)}
           <li class="flex items-center gap-2">
             <button
@@ -164,7 +162,7 @@
               style="background:{priorityColor(task)}"
             ></span>
             <button
-              class="flex-1 text-sm text-left text-ink truncate hover:text-accent transition"
+              class="flex-1 text-sm font-medium text-left text-ink truncate hover:text-accent transition"
               onclick={() => task.url && openUrl(task.url)}
               title={task.name}
             >{task.name}</button>

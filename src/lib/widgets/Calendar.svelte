@@ -231,16 +231,16 @@
   }
 </script>
 
-<div class="flex flex-col h-full">
+<div class="cal-root flex flex-col h-full">
   <!-- Header -->
   <div class="flex items-center justify-between mb-3">
-    <h2 class="text-xs uppercase tracking-wider text-mute">Calendar</h2>
+    <h2 class="text-xs uppercase tracking-wider cal-label">Calendar</h2>
     <div class="flex items-center gap-3 text-xs">
-      <div class="flex border border-accent/30 rounded-md p-0.5 gap-0.5">
+      <div class="flex cal-tab-border rounded-md p-0.5 gap-0.5">
         {#each ['list', 'day', 'week', 'month'] as v (v)}
           <button
             class="px-2 py-0.5 rounded transition capitalize
-                   {view === v ? 'bg-accent text-white' : 'text-mute hover:text-ink'}"
+                   {view === v ? 'cal-tab-active' : 'text-mute hover:text-ink'}"
             onclick={() => (view = v as View)}
           >{v}</button>
         {/each}
@@ -285,7 +285,7 @@
                   <span class="text-mute text-xs w-14 flex-shrink-0 tabular-nums">
                     {ev.all_day ? 'all day' : formatTime(ev.start_time)}
                   </span>
-                  <span class="flex-1 min-w-0 truncate" title="{ev.title} · {ev.calendar}">
+                  <span class="flex-1 min-w-0 truncate text-base" title="{ev.title} · {ev.calendar}">
                     {ev.title}
                   </span>
                 </li>
@@ -397,7 +397,7 @@
             style="left:3rem;right:0.25rem;top:{top}px;height:{height}px;background:{color}26;border-left:3px solid {color}"
             title="{ev.title} · {ev.calendar}"
           >
-            <div class="text-xs font-medium truncate">{ev.title}</div>
+            <div class="text-sm font-medium truncate">{ev.title}</div>
             {#if height >= 32}
               <div class="text-[10px] text-mute truncate">
                 {formatTime(ev.start_time)} – {formatTime(ev.end_time)}
@@ -496,6 +496,22 @@
 </div>
 
 <style>
+  /* Amber in light mode, theme accent in dark/space — mirrors Vault accent logic */
+  .cal-root { --cal-accent: #b87333; }
+  :global(.dark) .cal-root,
+  :global(.space) .cal-root { --cal-accent: var(--color-accent); }
+
+  .cal-label { color: var(--cal-accent); }
+
+  .cal-tab-active {
+    background: var(--cal-accent);
+    color: #fff;
+  }
+
+  .cal-tab-border {
+    border: 1px solid color-mix(in srgb, var(--cal-accent) 30%, transparent);
+  }
+
   /* Popup needs to escape the grid cell stacking context */
   .cal-popup {
     box-shadow: 0 4px 16px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08);

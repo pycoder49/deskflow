@@ -21,3 +21,8 @@ pub fn save_notepad(content: String) -> Result<(), String> {
     let path = notepad_path();
     std::fs::write(&path, content).map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub fn save_to_path(content: String, path: String) -> Result<(), String> {
+    std::fs::write(&path, content).map_err(|e| e.to_string())
+}

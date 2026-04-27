@@ -75,11 +75,15 @@ fn parse_tsv(raw: &str) -> Vec<CalendarEvent> {
         .collect()
 }
 
+pub async fn fetch_events(start: &str, end: &str) -> Result<Vec<CalendarEvent>, String> {
+    let raw = run_gcalcli(start, end).await?;
+    Ok(parse_tsv(&raw))
+}
+
 #[tauri::command]
 pub async fn get_calendar_events(
     start: String,
     end: String,
 ) -> Result<Vec<CalendarEvent>, String> {
-    let raw = run_gcalcli(&start, &end).await?;
-    Ok(parse_tsv(&raw))
+    fetch_events(&start, &end).await
 }

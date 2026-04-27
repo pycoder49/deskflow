@@ -1,6 +1,7 @@
 mod calendar;
 mod clickup;
 mod notepad;
+mod projects;
 mod vault;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -12,6 +13,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             clickup::get_today_tasks,
             clickup::get_now_next,
@@ -22,6 +24,10 @@ pub fn run() {
             vault::get_vault_pulse,
             notepad::get_notepad,
             notepad::save_notepad,
+            notepad::save_to_path,
+            projects::get_projects,
+            projects::add_project,
+            projects::remove_project,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

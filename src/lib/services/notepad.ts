@@ -7,3 +7,7 @@ export async function getNotepad(): Promise<string> {
 export async function saveNotepad(content: string): Promise<void> {
   return invoke<void>('save_notepad', { content });
 }
+
+export async function saveToPath(content: string, path: string): Promise<void> {
+  return invoke<void>('save_to_path', { content, path });
+}
