@@ -16,16 +16,16 @@ Designed to be personalized -- plug in your own ClickUp, calendar, and Claude ac
 
 ## Features
 
-- **Now / Next** — Claude picks 1 "Now" + up to 2 "Next" tasks from your daily list. Calendar-aware.
-- **Today Tasks** — Live ClickUp daily list. Check off, edit, delete, open in ClickUp.
-- **Calendar** — Day / Week / Month / List views via `gcalcli`. Logical day rolls over at 4 am.
-- **Start Day** — AI-driven morning routine: refreshes stats, considers calendar, moves area-list tasks into Daily To-Do.
-- **TaskStats** — 14-day completion chart + today's done list.
-- **Ambience** — 4 ambient sound loops, Spotify playback, animated canvas FX, and an embedded PTY terminal.
-- **Notepad** — Auto-saving scratchpad.
-- **Quick Capture (Ctrl+N)** — Add a ClickUp task without leaving the dashboard.
-- **Action logging** — Configurable destination: ClickUp doc, local Markdown file, or disabled.
-- **8 themes** — light, dark, space, nord, forest, vintage, slate, cloudy. SVG-animated backgrounds for space / forest / cloudy.
+- **Now / Next** -- Claude picks 1 "Now" + up to 2 "Next" tasks from your daily list. Calendar-aware
+- **Today Tasks** -- Live ClickUp daily list. Check off, edit, delete, open in ClickUp
+- **Calendar** -- Day / Week / Month / List views via `gcalcli`. Logical day rolls over at 4 am
+- **Start Day** -- AI-driven morning routine: refreshes stats, considers calendar, moves area-list tasks into Daily To-Do
+- **TaskStats** -- 14-day completion chart + today's done list for motivation
+- **Ambience** -- 4 ambient sound loops, Spotify playback, animated canvas FX, and an embedded PTY terminal
+- **Notepad** -- Auto-saving scratchpad
+- **Quick Capture (Ctrl+N)** -- Add a ClickUp task without leaving the dashboard
+- **Action logging** -- Configurable destination: ClickUp doc, local Markdown file, or disabled
+- **8 themes** -- light, dark, space, nord, forest, vintage, slate, cloudy. SVG-animated backgrounds for space / forest / cloudy
 
 ---
 
@@ -88,8 +88,8 @@ Written by the setup wizard. Gitignored. Hand-editable.
 }
 ```
 
-- **`commands.start_day_skill`** — Claude Code skill the Start Day button runs. Default `start-day` ships with the repo. Set to a custom skill name to override.
-- **`logging.mode`** — `clickup_doc`, `local_file`, or `none`. Completion counts for the chart record separately via Start Day and always work.
+- **`commands.start_day_skill`** -- Claude Code skill the Start Day button runs. Default `start-day` ships with the repo. Set to a custom skill name to override.
+- **`logging.mode`** -- `clickup_doc`, `local_file`, or `none`. Completion counts for the chart record separately via Start Day and always work.
 
 ---
 
@@ -97,15 +97,15 @@ Written by the setup wizard. Gitignored. Hand-editable.
 
 Two paths invoke Claude:
 
-- **Now / Next** auto-fires on dashboard open and when an in-focus task changes. ~15–25 calls / day, ~500 input tokens each.
-- **Start Day** runs once per logical day when clicked. ~3–8k input tokens per click.
+- **Now / Next** auto-fires on dashboard open and when an in-focus task changes. ~5-10 calls / day (number of tasks you complete), ~500 input tokens each.
+- **Start Day** runs once per logical day when clicked. (state is stored, so subsequent clicks will not trigger the workflow).
 
-Post-June 15 2026 that's roughly $0.50–$1.50 / day at API pricing. To reduce:
+If you wish to remove the AI aspect of planning, you can:
 
 - Set `commands.start_day_skill` to a no-AI custom skill that just runs `python scripts/start_day.py` → Start Day costs zero tokens.
 - Comment out the `NowNext` mount in `src/routes/+page.svelte` to disable the focus picker entirely.
 
-Track spend at [console.anthropic.com](https://console.anthropic.com/).
+Track spending at [console.anthropic.com](https://console.anthropic.com/).
 
 ---
 

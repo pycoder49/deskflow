@@ -13,11 +13,15 @@
   let volume = $state(0.5);
 
   // ─── Sounds ──────────────────────────────────────────────────────────────────
+  // `gain` is a per-track multiplier applied to the shared volume slider, used
+  // to even out perceived loudness when source clips were mastered at
+  // different levels (cafe's YouTube source is notably quieter than the
+  // others). Final audio.volume is clamped to 1.0.
   const SOUNDS = [
-    { id: 'cafe',      label: 'Coffee Shop', emoji: '☕', desc: 'Café background noise',    file: '/sounds/cafe.mp3' },
-    { id: 'rain',      label: 'Rain & Storm', emoji: '🌧', desc: 'Heavy rain with thunder',  file: '/sounds/rain.mp3' },
-    { id: 'medieval',  label: 'Medieval',    emoji: '🏰', desc: 'Celtic ambient music',      file: '/sounds/medieval.mp3' },
-    { id: 'cyberpunk', label: 'Synthwave',   emoji: '🌆', desc: 'Cyberpunk retrowave',       file: '/sounds/cyberpunk.mp3' },
+    { id: 'cafe',      label: 'Coffee Shop', emoji: '☕', desc: 'Café background noise',    file: '/sounds/cafe.mp3',      gain: 1.8 },
+    { id: 'rain',      label: 'Rain & Storm', emoji: '🌧', desc: 'Heavy rain with thunder',  file: '/sounds/rain.mp3',      gain: 1.0 },
+    { id: 'medieval',  label: 'Medieval',    emoji: '🏰', desc: 'Celtic ambient music',      file: '/sounds/medieval.mp3',  gain: 1.0 },
+    { id: 'cyberpunk', label: 'Synthwave',   emoji: '🌆', desc: 'Cyberpunk retrowave',       file: '/sounds/cyberpunk.mp3', gain: 1.0 },
   ] as const;
 
   type SoundId = typeof SOUNDS[number]['id'];
@@ -33,7 +37,7 @@
       const sound = SOUNDS.find(s => s.id === id)!;
       const audio = new Audio(sound.file);
       audio.loop = true;
-      audio.volume = volume;
+      audio.volume = Math.min(1, volume * sound.gain);
       audio.play().catch(() => {});
       audios[id] = audio;
       playing[id] = true;
@@ -41,7 +45,11 @@
   }
 
   $effect(() => {
-    Object.values(audios).forEach(a => { if (a) a.volume = volume; });
+    for (const [id, audio] of Object.entries(audios)) {
+      if (!audio) continue;
+      const sound = SOUNDS.find(s => s.id === id);
+      audio.volume = Math.min(1, volume * (sound?.gain ?? 1));
+    }
   });
 
   function applyPreset(sound: SoundId | null, bg: BackgroundEffect, sec: SectionEffect) {
