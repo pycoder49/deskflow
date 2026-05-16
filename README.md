@@ -166,4 +166,4 @@ Things I want to build next — contributions welcome.
 
 ## License
 
-MIT
+[AGPL-3.0](LICENSE) — free to use, modify, and share. If you distribute a modified version or build a product on top of this, you must open-source your changes under the same license.
