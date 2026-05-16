@@ -1,5 +1,7 @@
 import { writable } from 'svelte/store';
 
-export type VisualEffect = 'none' | 'aurora' | 'particles' | 'rain' | 'matrix';
+export type BackgroundEffect = 'none' | 'particles' | 'rain' | 'snow' | 'fireflies' | 'fog';
+export type SectionEffect = 'none' | 'breathe' | 'scanlines';
 
-export const visualEffect = writable<VisualEffect>('none');
+export const backgroundEffect = writable<BackgroundEffect>('none');
+export const sectionEffect = writable<SectionEffect>('none');

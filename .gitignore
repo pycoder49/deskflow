@@ -49,3 +49,10 @@ notepad.md
 hot.md
 BUILD_NOTES.md
 projects.json
+os-config.json
+
+# Downloaded ambient sounds (per-user; populated by scripts/download_sounds.py)
+static/sounds/
+
+# Local-file action log destination (only used if logging.mode == "local_file")
+logs/

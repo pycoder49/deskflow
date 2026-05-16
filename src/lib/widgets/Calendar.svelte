@@ -1,9 +1,10 @@
 <script lang="ts">
   import {
     getCalendarEvents,
-    eventColor,
     type CalendarEvent,
   } from '$lib/services/calendar';
+  import { untrack } from 'svelte';
+  import { logicalToday as getLogicalToday, startupRetry } from '$lib/stores/refresh';
 
   type View = 'week' | 'list' | 'day' | 'month';
 
@@ -21,13 +22,7 @@
   const PX_PER_HOUR = 40;
   const TIMELINE_HEIGHT = (HOUR_END - HOUR_START) * PX_PER_HOUR;
 
-  const logicalToday = $derived.by(() => {
-    const shifted = new Date(Date.now() - 4 * 60 * 60 * 1000);
-    const y = shifted.getFullYear();
-    const m = String(shifted.getMonth() + 1).padStart(2, '0');
-    const d = String(shifted.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  });
+  const logicalToday = getLogicalToday();
 
   function addDays(iso: string, n: number): string {
     const d = new Date(iso + 'T12:00:00');
@@ -161,6 +156,11 @@
     load(fetchRange.start, fetchRange.end);
   });
 
+  $effect(() => {
+    $startupRetry;
+    untrack(() => { if (error) load(fetchRange.start, fetchRange.end); });
+  });
+
   const grouped = $derived.by(() => {
     const map = new Map<string, CalendarEvent[]>();
     for (const ev of events) {
@@ -188,7 +188,7 @@
         top = Math.max(0, top);
         bottom = Math.min(TIMELINE_HEIGHT, bottom);
         const height = Math.max(20, bottom - top);
-        return { ev, top, height, color: eventColor(ev.calendar) };
+        return { ev, top, height };
       })
       .filter((b) => b.top < TIMELINE_HEIGHT && b.top + b.height > 0)
   );
@@ -225,6 +225,19 @@
       };
     });
   });
+
+  function jumpToWeek(iso: string) {
+    const target = new Date(iso + 'T12:00:00');
+    const today = new Date(logicalToday + 'T12:00:00');
+    const targetDow = target.getDay();
+    const targetMon = new Date(target);
+    targetMon.setDate(target.getDate() + (targetDow === 0 ? -6 : 1 - targetDow));
+    const todayDow = today.getDay();
+    const todayMon = new Date(today);
+    todayMon.setDate(today.getDate() + (todayDow === 0 ? -6 : 1 - todayDow));
+    weekOffset = Math.round((targetMon.getTime() - todayMon.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    view = 'week';
+  }
 
   function refresh() {
     load(fetchRange.start, fetchRange.end);
@@ -277,10 +290,9 @@
             </h3>
             <ul class="space-y-1">
               {#each dayEvents as ev}
-                {@const c = eventColor(ev.calendar)}
                 <li
                   class="flex items-center gap-2 text-sm px-2 py-1 rounded"
-                  style="border-left:2px solid {c};background:{c}18"
+                  style="border-left:2px solid var(--color-accent);background:color-mix(in srgb, var(--color-accent) 10%, transparent)"
                 >
                   <span class="text-mute text-xs w-14 flex-shrink-0 tabular-nums">
                     {ev.all_day ? 'all day' : formatTime(ev.start_time)}
@@ -329,10 +341,9 @@
           <!-- Events -->
           <div class="flex-1 overflow-y-auto p-0.5 space-y-0.5">
             {#each day.events as ev}
-              {@const c = eventColor(ev.calendar)}
               <div
                 class="rounded px-1 py-0.5 text-[10px] leading-tight"
-                style="border-left:2px solid {c};background:{c}18"
+                style="border-left:2px solid var(--color-accent);background:color-mix(in srgb, var(--color-accent) 10%, transparent)"
                 title="{ev.title}{ev.all_day ? '' : ` · ${formatTime(ev.start_time)}`}"
               >
                 {#if !ev.all_day}
@@ -368,10 +379,9 @@
     {#if dayAllDay.length > 0}
       <div class="flex flex-wrap gap-1 mb-2">
         {#each dayAllDay as ev}
-          {@const c = eventColor(ev.calendar)}
           <span
             class="px-2 py-0.5 text-[11px] rounded"
-            style="background:{c}26;border-left:2px solid {c}"
+            style="background:color-mix(in srgb, var(--color-accent) 15%, transparent);border-left:2px solid var(--color-accent)"
             title="{ev.title} · {ev.calendar}"
           >{ev.title}</span>
         {/each}
@@ -391,10 +401,10 @@
           </div>
         {/each}
 
-        {#each timedBlocks as { ev, top, height, color } (ev.title + ev.start_time)}
+        {#each timedBlocks as { ev, top, height } (ev.title + ev.start_time)}
           <div
             class="absolute rounded px-2 py-1 overflow-hidden"
-            style="left:3rem;right:0.25rem;top:{top}px;height:{height}px;background:{color}26;border-left:3px solid {color}"
+            style="left:3rem;right:0.25rem;top:{top}px;height:{height}px;background:color-mix(in srgb, var(--color-accent) 15%, transparent);border-left:3px solid var(--color-accent)"
             title="{ev.title} · {ev.calendar}"
           >
             <div class="text-sm font-medium truncate">{ev.title}</div>
@@ -436,13 +446,15 @@
     <div class="grid grid-cols-7 grid-rows-6 gap-1 flex-1 min-h-0">
       {#each monthGrid as cell (cell.iso)}
         <div
-          class="relative border border-line rounded p-1 flex flex-col
+          class="relative border border-line rounded p-1 flex flex-col cursor-pointer
                  {cell.isCurrentMonth ? '' : 'opacity-40'}
                  {cell.isToday ? 'ring-1 ring-accent/60' : ''}"
           onmouseenter={() => (hoveredCell = cell.iso)}
           onmouseleave={() => (hoveredCell = null)}
+          ondblclick={() => jumpToWeek(cell.iso)}
           role="gridcell"
           tabindex="0"
+          title="Double-click to open week view"
         >
           <!-- Hover popup -->
           {#if hoveredCell === cell.iso && cell.events.length > 0}
@@ -451,11 +463,10 @@
                 {cell.day} {monthAnchor.toLocaleDateString(undefined, { month: 'short' })}
               </div>
               {#each cell.events as ev}
-                {@const c = eventColor(ev.calendar)}
                 <div class="flex items-start gap-1.5 py-0.5">
                   <span
                     class="w-1.5 h-1.5 rounded-full shrink-0 mt-[3px]"
-                    style="background:{c}"
+                    style="background:var(--color-accent)"
                   ></span>
                   <div class="flex-1 min-w-0">
                     <div class="text-xs text-ink leading-snug truncate">{ev.title}</div>
@@ -479,7 +490,7 @@
               {#each cell.events.slice(0, 5) as ev}
                 <span
                   class="w-1.5 h-1.5 rounded-full"
-                  style="background:{eventColor(ev.calendar)}"
+                  style="background:var(--color-accent)"
                 ></span>
               {/each}
               {#if cell.events.length > 5}
@@ -497,9 +508,7 @@
 
 <style>
   /* Amber in light mode, theme accent in dark/space — mirrors Vault accent logic */
-  .cal-root { --cal-accent: #b87333; }
-  :global(.dark) .cal-root,
-  :global(.space) .cal-root { --cal-accent: var(--color-accent); }
+  .cal-root { --cal-accent: var(--color-accent); }
 
   .cal-label { color: var(--cal-accent); }
 

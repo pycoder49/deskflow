@@ -6,6 +6,7 @@
     type Task,
     type NowNextResult,
   } from '$lib/services/clickup';
+  import { untrack } from 'svelte';
   import {
     clickupVersion,
     completedTasks,
@@ -14,6 +15,7 @@
     clearCompleted,
     bumpClickup,
     nowNextIds,
+    startupRetry,
   } from '$lib/stores/refresh';
   import { openUrl } from '@tauri-apps/plugin-opener';
 
@@ -48,7 +50,7 @@
     completing = task.id;
     markCompleted(task);
     try {
-      await completeTask(task.id, task.name);
+      await completeTask(task.id, task.name, task.tags);
       // Task was in NowNext display by definition — re-pick.
       bumpClickup();
     } catch (e) {
@@ -78,6 +80,11 @@
   $effect(() => {
     $clickupVersion;
     load(true);
+  });
+
+  $effect(() => {
+    $startupRetry;
+    untrack(() => { if (error) load(true); });
   });
 </script>
 

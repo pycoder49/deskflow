@@ -12,8 +12,12 @@ export interface CalendarEvent {
 
 // Calendar-source → palette color. Per-event colors aren't exposed via gcalcli
 // TSV, so we color by source. Holidays are intentionally muted.
-export const CALENDAR_COLORS: Record<string, string> = {
-  'rn.ahuja04@gmail.com': '#7aa2f7', // Personal — soft blue
+// The personal calendar email comes from `os-config.json` (loaded via
+// the config store); other calendar names are edited here directly.
+import { get } from 'svelte/store';
+import { config } from '$lib/stores/config';
+
+export const STATIC_CALENDAR_COLORS: Record<string, string> = {
   'Family': '#e0af68',                // warm tangerine
   'Accelerate 2025-2026 Live Session & Events': '#9ece6a', // sage
 };
@@ -23,7 +27,9 @@ const MUTED_COLOR = '#6b7280';
 
 export function eventColor(calendar: string): string {
   if (calendar.toLowerCase().includes('holiday')) return MUTED_COLOR;
-  return CALENDAR_COLORS[calendar] ?? DEFAULT_COLOR;
+  const personalEmail = get(config)?.calendar.personal_email;
+  if (personalEmail && calendar === personalEmail) return '#7aa2f7';
+  return STATIC_CALENDAR_COLORS[calendar] ?? DEFAULT_COLOR;
 }
 
 // `start` and `end` are date strings — either YYYY-MM-DD or any phrase

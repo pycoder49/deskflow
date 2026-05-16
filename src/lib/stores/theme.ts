@@ -1,8 +1,9 @@
 import { writable } from 'svelte/store';
 import { browser } from '$app/environment';
 
-export type Theme = 'light' | 'dark' | 'space';
-const THEMES: Theme[] = ['light', 'dark', 'space'];
+export type Theme = 'light' | 'dark' | 'space' | 'nord' | 'forest' | 'vintage' | 'slate' | 'cloudy';
+const THEMES: Theme[] = ['light', 'dark', 'space', 'nord', 'forest', 'vintage', 'slate', 'cloudy'];
+const THEME_CLASSES = ['dark', 'space', 'nord', 'forest', 'vintage', 'slate', 'cloudy'];
 
 function readInitial(): Theme {
   if (!browser) return 'light';
@@ -14,9 +15,8 @@ function readInitial(): Theme {
 function apply(next: Theme) {
   if (!browser) return;
   const root = document.documentElement;
-  root.classList.remove('dark', 'space');
-  if (next === 'dark') root.classList.add('dark');
-  else if (next === 'space') root.classList.add('space');
+  root.classList.remove(...THEME_CLASSES);
+  if (next !== 'light') root.classList.add(next);
   localStorage.setItem('theme', next);
 }
 

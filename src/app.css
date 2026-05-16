@@ -2,7 +2,11 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 @custom-variant space (&:where(.space, .space *));
-
+@custom-variant nord (&:where(.nord, .nord *));
+@custom-variant forest (&:where(.forest, .forest *));
+@custom-variant vintage (&:where(.vintage, .vintage *));
+@custom-variant slate (&:where(.slate, .slate *));
+@custom-variant cloudy (&:where(.cloudy, .cloudy *));
 @theme {
   --font-sans: Arial, "Helvetica Neue", Helvetica, sans-serif;
   --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
@@ -13,6 +17,12 @@
   --color-mute: #6b6b6b;
   --color-line: #e8e6e0;
   --color-accent: #4a6b7c;
+  --color-chart-a: #c87d3e;
+  --color-chart-b: #7a9080;
+  --color-term-bg: rgba(0,0,0,0.06);
+  --color-term-cmd: #295080;
+  --color-term-fg: #3a5a3a;
+  --color-term-err: #cc3300;
 }
 
 .dark {
@@ -22,6 +32,12 @@
   --color-mute: #8a8a8a;
   --color-line: #2d3036;
   --color-accent: #7a9cb0;
+  --color-chart-a: #4dd9aa;
+  --color-chart-b: #5a7d9a;
+  --color-term-bg: rgba(0,0,0,0.4);
+  --color-term-cmd: #f0c060;
+  --color-term-fg: #a8ff78;
+  --color-term-err: #ff6060;
 }
 
 .space {
@@ -31,6 +47,77 @@
   --color-mute: #7a7e8c;
   --color-line: #1a1d2a;
   --color-accent: #9b8eff;
+  --color-chart-a: #d966f0;
+  --color-chart-b: #7055e8;
+  --color-term-bg: rgba(0,0,12,0.7);
+  --color-term-cmd: #e888e0;
+  --color-term-fg: #b8c0ff;
+  --color-term-err: #ff6080;
+}
+
+/* Nord — arctic blues */
+.nord {
+  --color-base: #2e3440;
+  --color-surface: #3b4252;
+  --color-ink: #eceff4;
+  --color-mute: #9099aa;
+  --color-line: #434c5e;
+  --color-accent: #88c0d0;
+  --color-chart-a: #a3be8c;
+  --color-chart-b: #81a1c1;
+  --color-term-bg: rgba(20,23,30,0.8);
+  --color-term-cmd: #ebcb8b;
+  --color-term-fg: #a3be8c;
+  --color-term-err: #bf616a;
+}
+
+/* Vintage — aged parchment notebook */
+.vintage {
+  --font-sans: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  --color-base: #f4e4c1;
+  --color-surface: #fdf3dc;
+  --color-ink: #2c1a0e;
+  --color-mute: #7c5c3e;
+  --color-line: #d4b896;
+  --color-accent: #8b3a2a;
+  --color-chart-a: #c47c2e;
+  --color-chart-b: #5a7a3a;
+  --color-term-bg: rgba(30,15,5,0.8);
+  --color-term-cmd: #f0e8c0;
+  --color-term-fg: #e8b050;
+  --color-term-err: #ff6040;
+}
+
+/* Forest — deep woodland; vibrant greens floor→canopy */
+.forest {
+  --color-base: #0f1a0b;
+  --color-surface: #172812;
+  --color-ink: #e0d8b0;
+  --color-mute: #80b85a;
+  --color-line: #203418;
+  --color-accent: #62e83a;
+  --color-chart-a: #e8b830;
+  --color-chart-b: #38d870;
+  --color-term-bg: rgba(0,8,0,0.65);
+  --color-term-cmd: #f8d060;
+  --color-term-fg: #7aff4a;
+  --color-term-err: #ff8040;
+}
+
+/* Slate — deep navy, icy ink */
+.slate {
+  --color-base: #0d1b24;
+  --color-surface: #142230;
+  --color-ink: #d8ecf4;
+  --color-mute: #4e7a8e;
+  --color-line: #1c3040;
+  --color-accent: #38aad4;
+  --color-chart-a: #3cc4a0;
+  --color-chart-b: #7080e8;
+  --color-term-bg: rgba(0,8,18,0.75);
+  --color-term-cmd: #90e0a8;
+  --color-term-fg: #5dd4f8;
+  --color-term-err: #ff6060;
 }
 
 html,
@@ -46,6 +133,22 @@ body {
 
 /* Space theme starfield is handled by SpaceBackground.svelte (SVG, fixed layer).
    Only color variables are needed here. */
+
+/* Cloudy — overcast neutral grey, stormy midday */
+.cloudy {
+  --color-base:     #878f95;
+  --color-surface:  #a8b2ba;
+  --color-ink:      #0f1820;
+  --color-mute:     #2c3c48;
+  --color-line:     #5a6570;
+  --color-accent:   #1e5c84;
+  --color-chart-a:  #c06010;
+  --color-chart-b:  #0090c8;
+  --color-term-bg:  rgba(0, 8, 14, 0.65);
+  --color-term-cmd: #60a8c8;
+  --color-term-fg:  #80bedd;
+  --color-term-err: #c85858;
+}
 
 /* Slim, themed scrollbars — only show on hover so they don't compete visually. */
 * {
@@ -71,4 +174,20 @@ body {
 }
 *::-webkit-scrollbar-thumb:hover {
   background: var(--color-mute);
+}
+
+/* ─── Section effect: breathe ────────────────────────────────────────────── */
+@keyframes widget-breathe {
+  0%, 100% { box-shadow: none; }
+  50%       { box-shadow: 0 0 24px 6px color-mix(in srgb, var(--color-accent) 40%, transparent); }
+}
+
+.effect-breathe section {
+  animation: widget-breathe 4.5s ease-in-out infinite;
+}
+
+/* ─── Spotify waveform ───────────────────────────────────────────────────── */
+@keyframes sp-wave {
+  from { transform: scaleY(0.12); }
+  to   { transform: scaleY(1); }
 }

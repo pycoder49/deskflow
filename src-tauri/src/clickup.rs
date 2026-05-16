@@ -1,13 +1,16 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
+use crate::config;
+
 const BASE: &str = "https://api.clickup.com/api/v2";
-const DOCS_BASE: &str = "https://api.clickup.com/api/v3";
-const DAILY_LIST: &str = "901414961997";
-const WORKSPACE_ID: &str = "90141074324";
 
 fn token() -> String {
     std::env::var("CLICKUP_TOKEN").unwrap_or_default()
+}
+
+fn daily_list_id() -> String {
+    config::get().clickup.daily_list_id.clone()
 }
 
 fn client() -> Client {
@@ -209,62 +212,51 @@ async fn call_claude_cli(prompt: &str) -> Result<String, String> {
         .map_err(|e| format!("claude stdout was not valid UTF-8: {e}"))
 }
 
-#[derive(Deserialize)]
-struct ClickupState {
-    today_doc_id: String,
-    today_page_id: String,
-    date: String,
-}
+async fn log_action(action: &str, task_name: &str, tags: &[TaskTag], details: Option<&str>) {
+    let script = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../scripts/log_action.py");
 
-fn read_clickup_state() -> Option<ClickupState> {
-    let path = dirs::home_dir()?.join(".claude").join("clickup-state.json");
-    let raw = std::fs::read_to_string(path).ok()?;
-    let state: ClickupState = serde_json::from_str(&raw).ok()?;
-    // Logical day: 4am rollover. See ~/.claude/CLAUDE.md → Logical Day.
-    let today = (chrono::Local::now() - chrono::Duration::hours(4))
-        .format("%Y-%m-%d")
-        .to_string();
-    if state.date != today {
-        return None;
-    }
-    Some(state)
-}
+    let tag_str = tags.iter().map(|t| t.name.as_str()).collect::<Vec<_>>().join(",");
 
-async fn append_to_today_doc(entry: &str) -> Result<(), String> {
-    let state = match read_clickup_state() {
-        Some(s) => s,
-        None => return Ok(()),
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut c = tokio::process::Command::new("cmd");
+        c.args(["/C", "python"]);
+        c.arg(script);
+        c
+    };
+    #[cfg(not(windows))]
+    let mut cmd = {
+        let mut c = tokio::process::Command::new("python3");
+        c.arg(script);
+        c
     };
 
-    let url = format!(
-        "{DOCS_BASE}/workspaces/{WORKSPACE_ID}/docs/{}/pages/{}",
-        state.today_doc_id, state.today_page_id
-    );
-    let body = serde_json::json!({
-        "content": format!("\n{entry}"),
-        "content_edit_mode": "append",
-        "content_format": "text/md",
-    });
-
-    let resp = client()
-        .put(&url)
-        .header("Authorization", token())
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("doc append request failed: {e}"))?;
-
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let text = resp.text().await.unwrap_or_default();
-        return Err(format!("doc append {status}: {text}"));
+    cmd.arg("--action").arg(action)
+        .arg("--task-name").arg(task_name);
+    if !tag_str.is_empty() {
+        cmd.arg("--tags").arg(&tag_str);
     }
-    Ok(())
+    if let Some(d) = details {
+        cmd.arg("--details").arg(d);
+    }
+
+    match cmd.output().await {
+        Ok(out) if out.status.success() => {
+            eprintln!("[log] {}", String::from_utf8_lossy(&out.stdout).trim());
+        }
+        Ok(out) => {
+            eprintln!("[log] script failed: {}", String::from_utf8_lossy(&out.stderr).trim());
+        }
+        Err(e) => {
+            eprintln!("[log] spawn failed: {e}");
+        }
+    }
 }
 
 async fn fetch_today_tasks() -> Result<Vec<Task>, String> {
     let resp = client()
-        .get(format!("{BASE}/list/{DAILY_LIST}/task"))
+        .get(format!("{BASE}/list/{}/task", daily_list_id()))
         .header("Authorization", token())
         .query(&[("include_closed", "false"), ("subtasks", "false")])
         .send()
@@ -280,6 +272,39 @@ async fn fetch_today_tasks() -> Result<Vec<Task>, String> {
 #[tauri::command]
 pub async fn get_today_tasks() -> Result<Vec<Task>, String> {
     fetch_today_tasks().await
+}
+
+#[tauri::command]
+pub async fn get_completed_today_tasks() -> Result<Vec<Task>, String> {
+    // Logical day starts at 4am — only return tasks completed since then.
+    let day_start_ms = {
+        let now = chrono::Local::now();
+        let shifted = now - chrono::Duration::hours(4);
+        let midnight = shifted
+            .date_naive()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let day_start = chrono::TimeZone::from_local_datetime(&chrono::Local, &midnight)
+            .unwrap()
+            + chrono::Duration::hours(4);
+        day_start.timestamp_millis().to_string()
+    };
+
+    let resp = client()
+        .get(format!("{BASE}/list/{}/task", daily_list_id()))
+        .header("Authorization", token())
+        .query(&[
+            ("include_closed", "true"),
+            ("subtasks", "false"),
+            ("statuses[]", "complete"),
+            ("date_updated_gt", &day_start_ms),
+        ])
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let data: ListResponse = parse_response(resp).await?;
+    Ok(data.tasks.into_iter().filter(|t| is_done(t)).collect())
 }
 
 #[tauri::command]
@@ -429,16 +454,12 @@ pub async fn create_task(
         .map_err(|e| e.to_string())?;
 
     let task: Task = parse_response(resp).await?;
-
-    if let Err(e) = append_to_today_doc(&format!("- **add** — {}", task.name)).await {
-        eprintln!("[log] add append failed: {e}");
-    }
-
+    log_action("create", &task.name, &task.tags, None).await;
     Ok(task)
 }
 
 #[tauri::command]
-pub async fn complete_task(task_id: String, task_name: String) -> Result<(), String> {
+pub async fn complete_task(task_id: String, task_name: String, tags: Vec<TaskTag>) -> Result<(), String> {
     let body = serde_json::json!({ "status": "complete" });
 
     client()
@@ -449,15 +470,12 @@ pub async fn complete_task(task_id: String, task_name: String) -> Result<(), Str
         .await
         .map_err(|e| e.to_string())?;
 
-    if let Err(e) = append_to_today_doc(&format!("- **complete** — {task_name}")).await {
-        eprintln!("[log] complete append failed: {e}");
-    }
-
+    log_action("complete", &task_name, &tags, None).await;
     Ok(())
 }
 
 #[tauri::command]
-pub async fn uncheck_task(task_id: String, task_name: String) -> Result<(), String> {
+pub async fn uncheck_task(task_id: String, task_name: String, tags: Vec<TaskTag>) -> Result<(), String> {
     let body = serde_json::json!({ "status": "in progress" });
 
     client()
@@ -468,9 +486,172 @@ pub async fn uncheck_task(task_id: String, task_name: String) -> Result<(), Stri
         .await
         .map_err(|e| e.to_string())?;
 
-    if let Err(e) = append_to_today_doc(&format!("- **uncheck** — {task_name}")).await {
-        eprintln!("[log] uncheck append failed: {e}");
+    log_action("uncheck", &task_name, &tags, None).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_task(task_id: String, task_name: String, tags: Vec<TaskTag>) -> Result<(), String> {
+    let resp = client()
+        .delete(format!("{BASE}/task/{task_id}"))
+        .header("Authorization", token())
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("delete failed {status}: {text}"));
     }
 
+    log_action("delete", &task_name, &tags, None).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_task(
+    task_id: String,
+    task_name: String,
+    tags: Vec<TaskTag>,
+    new_name: Option<String>,
+    new_priority: Option<u8>,
+    new_due_date: Option<i64>,      // ms timestamp; 0 = clear
+    new_time_estimate: Option<i64>, // ms; 0 = clear
+    details: Option<String>,
+) -> Result<(), String> {
+    let mut body = serde_json::Map::new();
+    if let Some(ref name) = new_name {
+        body.insert("name".into(), serde_json::json!(name));
+    }
+    if let Some(priority) = new_priority {
+        body.insert("priority".into(), serde_json::json!(priority));
+    }
+    if let Some(due) = new_due_date {
+        if due == 0 {
+            body.insert("due_date".into(), serde_json::Value::Null);
+        } else {
+            body.insert("due_date".into(), serde_json::json!(due));
+        }
+    }
+    if let Some(est) = new_time_estimate {
+        body.insert("time_estimate".into(), serde_json::json!(est));
+    }
+
+    let resp = client()
+        .put(format!("{BASE}/task/{task_id}"))
+        .header("Authorization", token())
+        .json(&serde_json::Value::Object(body))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("update failed {status}: {text}"));
+    }
+
+    let display_name = new_name.as_deref().unwrap_or(&task_name);
+    log_action("update", display_name, &tags, details.as_deref()).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn start_day() -> Result<(), String> {
+    let skill = config::get().commands.start_day_skill.clone();
+    let arg = format!("/{skill}");
+    let project_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut c = tokio::process::Command::new("cmd");
+        c.args(["/C", "claude", "-p", &arg]);
+        c
+    };
+    #[cfg(not(windows))]
+    let mut cmd = {
+        let mut c = tokio::process::Command::new("claude");
+        c.args(["-p", &arg]);
+        c
+    };
+
+    cmd.current_dir(&project_root)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+
+    let child = cmd.spawn().map_err(|e| format!("failed to spawn claude: {e}"))?;
+    let output = child
+        .wait_with_output()
+        .await
+        .map_err(|e| format!("start-day failed: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("start-day exited {}: {stderr}", output.status));
+    }
+
+    Ok(())
+}
+
+#[derive(Serialize)]
+pub struct StatEntry {
+    pub date: String,
+    pub count: i64,
+}
+
+#[tauri::command]
+pub async fn get_task_stats() -> Result<Vec<StatEntry>, String> {
+    let stats_path = dirs::home_dir()
+        .ok_or("no home dir")?
+        .join(".claude/task-stats.json");
+
+    let map: std::collections::HashMap<String, i64> = if stats_path.exists() {
+        let content = tokio::fs::read_to_string(&stats_path)
+            .await
+            .map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).map_err(|e| e.to_string())?
+    } else {
+        std::collections::HashMap::new()
+    };
+
+    let logical_today = chrono::Local::now() - chrono::Duration::hours(4);
+    let mut entries = Vec::new();
+    for days_ago in (1..15i64).rev() {
+        let day = logical_today - chrono::Duration::days(days_ago);
+        let date = day.date_naive().to_string();
+        let count = map.get(&date).copied().unwrap_or(0);
+        entries.push(StatEntry { date, count });
+    }
+    Ok(entries)
+}
+
+#[tauri::command]
+pub async fn ensure_log_doc() -> Result<(), String> {
+    let script = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../scripts/log_action.py");
+
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut c = tokio::process::Command::new("cmd");
+        c.args(["/C", "python"]);
+        c.arg(script);
+        c
+    };
+    #[cfg(not(windows))]
+    let mut cmd = {
+        let mut c = tokio::process::Command::new("python3");
+        c.arg(script);
+        c
+    };
+
+    cmd.arg("--ensure");
+
+    let out = cmd.output().await.map_err(|e| format!("spawn failed: {e}"))?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(format!("ensure_log_doc failed: {stderr}"));
+    }
     Ok(())
 }

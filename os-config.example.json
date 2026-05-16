@@ -1,0 +1,21 @@
+{
+  "clickup": {
+    "workspace_id": "",
+    "daily_list_id": "",
+    "areas": [
+      { "list_id": "", "label": "School",   "slug": "school"   },
+      { "list_id": "", "label": "Learning", "slug": "learning" }
+    ]
+  },
+  "calendar": {
+    "personal_email": ""
+  },
+  "commands": {
+    "start_day_skill": "start-day"
+  },
+  "logging": {
+    "mode": "local_file",
+    "clickup_logs_folder_id": "",
+    "local_file_path": "logs/actions.md"
+  }
+}

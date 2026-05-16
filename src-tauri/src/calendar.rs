@@ -1,13 +1,21 @@
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 
-// gcalcli display names (the `summary` field). Update if a calendar is renamed.
-// `--calendar` flags must precede the subcommand.
-const CALENDARS: &[&str] = &[
-    "rn.ahuja04@gmail.com",
+use crate::config;
+
+// gcalcli display names (the `summary` field). Personal calendar comes from
+// `os-config.json`; secondary calendars (holidays, birthdays) are
+// edited in code below. `--calendar` flags must precede the subcommand.
+const EXTRA_CALENDARS: &[&str] = &[
     "Holidays in United States",
     "Birthdays",
 ];
+
+fn calendars() -> Vec<String> {
+    let mut cals = vec![config::get().calendar.personal_email.clone()];
+    cals.extend(EXTRA_CALENDARS.iter().map(|s| s.to_string()));
+    cals.into_iter().filter(|c| !c.is_empty()).collect()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CalendarEvent {
@@ -26,7 +34,7 @@ async fn run_gcalcli(start: &str, end: &str) -> Result<String, String> {
     // events with emoji or non-Latin characters crash gcalcli's print().
     let mut cmd = Command::new("gcalcli");
     cmd.env("PYTHONIOENCODING", "utf-8");
-    for cal in CALENDARS {
+    for cal in &calendars() {
         cmd.args(["--calendar", cal]);
     }
     cmd.args(["agenda", start, end, "--tsv", "--details=calendar"]);

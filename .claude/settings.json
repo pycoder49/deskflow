@@ -1,0 +1,6 @@
+{
+  "allowedTools": [
+    "Bash(gcalcli *)",
+    "Bash(python *log_action.py*)"
+  ]
+}
