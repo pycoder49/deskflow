@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    aryan_os_dashboard_lib::run()
+    deskflow_lib::run()
 }

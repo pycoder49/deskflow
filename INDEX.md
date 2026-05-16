@@ -1,4 +1,4 @@
-# Aryan OS Dashboard — File Index
+# DeskFlow — File Index
 
 **Last updated:** 2026-05-13 (cleanup pass: removed dead Projects/Vault/AmbientPanel/LayoutMocks; ambience store split)
 **Update rule:** Touch this file any time a source file is added, deleted, or renamed. One line per entry.
@@ -40,7 +40,7 @@
 
 ## Frontend — Shared
 
-- `src/app.html` — HTML shell (title: "Aryan OS").
+- `src/app.html` — HTML shell (title: "DeskFlow").
 - `src/app.css` — Tailwind entry + `@theme` tokens + theme overrides (`.dark`, `.space`, `.nord`, `.forest`, `.vintage`, `.slate`, `.cloudy`); per-theme `--color-chart-*` vars; themed scrollbars. Tags: theme CSS, colors, scrollbar.
 - `src/lib/types.ts` — Shared TS types (currently just `Theme` enum). Tags: shared types.
 
@@ -83,7 +83,7 @@
 - `vite.config.js` — Vite + `tailwindcss()` + `sveltekit()`; dev port 1420
 - `tsconfig.json` — Extends SvelteKit default
 - `src-tauri/Cargo.toml` — Rust deps: tauri 2, tauri-plugin-opener, tauri-plugin-dialog, serde, reqwest 0.12, dotenvy, tokio (process + io-util + rt), chrono, dirs, portable-pty
-- `src-tauri/tauri.conf.json` — Window "Aryan OS" 1400×900 (min 1100×700); identifier `com.aryan.osdashboard`
+- `src-tauri/tauri.conf.json` — Window "DeskFlow" 1400×900 (min 1100×700); identifier `com.deskflow.app`
 - `src-tauri/capabilities/default.json` — Tauri permission scopes (must include `opener:allow-open-url` for `obsidian://`; `dialog:allow-save` + `dialog:allow-open`)
 - `.env.example` — Template for `CLICKUP_TOKEN`, `VAULT_PATH`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`
 - `.gitignore` — `.env`, `notepad.md`, `hot.md`, `BUILD_NOTES.md`, `projects.json` excluded (personal/session data)

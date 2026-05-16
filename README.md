@@ -1,16 +1,16 @@
 # DeskFlow
 
-A personal desktop dashboard that pulls your daily workflow into one native window — ClickUp tasks, Google Calendar, ambient sounds, an embedded terminal, and a Claude-powered focus picker that tells you what to work on next. Built with Tauri 2 + SvelteKit.
+A personal desktop dashboard that pulls your daily workflow into one native window -- ClickUp tasks, Google Calendar, ambient sounds, an embedded terminal, and a Claude-powered focus picker that tells you what to work on next. Built with Tauri 2 + SvelteKit.
 
-The brain is the **Now / Next** widget: it reads your tasks, looks at today's calendar, and picks the single most important thing to do right now. Re-picks automatically as you complete tasks.
+The brain is the **Now / Next** widget (the task paralysis killer): it reads your tasks, looks at today's calendar, and picks the single most important thing to do right now. Re-picks automatically as you complete tasks.
 
-Designed to be personalized — plug in your own ClickUp, calendar, and Claude account. Expect a few rough edges around setup. PRs welcome.
+Designed to be personalized -- plug in your own ClickUp, calendar, and Claude account. Expect a few rough edges around setup. PRs welcome, and open to suggestions since this will be a ongoing project!
 
 ---
 
 > ## ⚠ Claude billing change — June 15th 2026
 >
-> The `claude -p` subprocess this dashboard uses **stops being covered by Pro / Max subscriptions on June 15th 2026.** After that date you'll need an Anthropic API key (set `ANTHROPIC_API_KEY`) and you pay per call — roughly **$0.50–$1.50 / day** of typical use. See [AI cost](#ai-cost) below for ways to reduce or disable it.
+> The `claude -p` subprocess this dashboard uses **stops being covered by Pro / Max subscriptions on June 15th 2026.** After that date you'll need an Anthropic API key (set `ANTHROPIC_API_KEY`). See [AI cost](#ai-cost) below for ways to reduce or disable it.
 
 ---
 
@@ -139,6 +139,28 @@ scripts/              Setup wizard, action logger, sound downloader
 **Start Day button does nothing.** Verify `commands.start_day_skill` in `os-config.json` and that `claude -p "/<that-skill>"` works when run from the project root.
 
 **TaskStats chart frozen on demo data.** The chart populates from Start Day clicks (records yesterday + backfills missed days). Click it daily — or write a `/check-out` skill that calls `scripts/record_stats.py --count N`.
+
+---
+
+## Roadmap / Ideas
+
+Things I want to build next — contributions welcome.
+
+**Machine learning & behavioral modeling**
+- **Task completion time prediction** — track how long tasks actually take vs. estimates per category; surface daily capacity warnings before you overcommit
+- **Behavioral pattern learning** — learn when you complete certain types of tasks (time of day, day of week, energy state); let the AI picker factor this into its recommendations
+- **Smart deferrals** — instead of bulk-moving every area task at Start Day, predict which ones you'll realistically touch based on historical completion patterns
+
+**Workflow features**
+- **Focus session tracking** — automatic Pomodoro-style sessions tied to the Now task; break suggestions based on actual session length; logged to stats
+- **Weekly AI retrospective** — end-of-week summary of what got done, what kept getting deferred and why, and a suggested focus for next week
+- **Natural language task capture** — parse "remind me to do X after my 3pm" and schedule it without opening ClickUp
+- **Cross-device sync** — lightweight mobile companion app for capturing tasks on the go
+
+**Integrations**
+- GitHub (open PRs, review requests surfaced as tasks)
+- Notion / Linear as alternative task backends
+- More calendar providers (Outlook, CalDAV)
 
 ---
 
