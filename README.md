@@ -1,10 +1,10 @@
-# Aryan OS Dashboard
+# DeskFlow
 
 A personal desktop dashboard that pulls your daily workflow into one native window — ClickUp tasks, Google Calendar, ambient sounds, an embedded terminal, and a Claude-powered focus picker that tells you what to work on next. Built with Tauri 2 + SvelteKit.
 
 The brain is the **Now / Next** widget: it reads your tasks, looks at today's calendar, and picks the single most important thing to do right now. Re-picks automatically as you complete tasks.
 
-It's a personal project. The code is shareable and customizable — plug in your own ClickUp, calendar, and Claude account — but expect a few rough edges around setup. PRs welcome.
+Designed to be personalized — plug in your own ClickUp, calendar, and Claude account. Expect a few rough edges around setup. PRs welcome.
 
 ---
 
@@ -47,8 +47,8 @@ It's a personal project. The code is shareable and customizable — plug in your
 ## Setup
 
 ```bash
-git clone https://github.com/pycoder49/aryan-os-dashboard.git
-cd aryan-os-dashboard
+git clone https://github.com/pycoder49/deskflow.git
+cd deskflow
 npm install
 pip install -r requirements.txt
 

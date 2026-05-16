@@ -1,4 +1,4 @@
-# CLAUDE.md — Aryan OS Dashboard
+# CLAUDE.md — DeskFlow
 
 > Read this file FIRST every session. It is your routing table.
 > Do not read files outside the task's Read column. Do not grep to "explore" — the codebase is mapped.
@@ -7,7 +7,7 @@
 
 ## Identity
 
-Aryan's personal dashboard — Tauri 2 desktop app aggregating daily workflow (ClickUp tasks, Google Calendar, vault knowledge, AI focus-picking).
+DeskFlow — personal desktop dashboard built with Tauri 2, aggregating daily workflow (ClickUp tasks, Google Calendar, vault knowledge, AI focus-picking).
 
 **Owner:** Aryan — CS student, UCSD 2026, Windows.
 **Related vault:** `C:/Users/aryan/Desktop/AryanOS/` — has its own CLAUDE.md. Cross-load only when the task explicitly touches vault files.
