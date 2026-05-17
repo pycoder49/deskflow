@@ -340,7 +340,7 @@
 
   <main class="flex-1 min-h-0 p-5 flex gap-4">
     <!-- Left 8 cols: Today / NowNext / Stats / Calendar -->
-    <div class="flex flex-col gap-4 min-h-0" style="flex: 8;">
+    <div class="flex flex-col gap-4 min-h-0 min-w-0" style="flex: 8;">
       <!-- Row 1: Today + NowNext — ~40% of height -->
       <div class="flex gap-4" style="flex: 3; min-height: 0;">
         <section class="flex-1 bg-surface border border-line rounded-xl p-5 min-h-0 overflow-hidden">
@@ -361,7 +361,7 @@
     </div>
 
     <!-- Right 4 cols: Ambience (60%) / Notepad (40%) -->
-    <div class="flex flex-col gap-4 min-h-0" style="flex: 4;">
+    <div class="flex flex-col gap-4 min-h-0 min-w-0" style="flex: 4;">
       <section class="bg-surface border border-line rounded-xl p-5" style="flex: 3; min-height: 0; overflow: hidden;">
         <Ambience />
       </section>
