@@ -21,6 +21,8 @@ pub struct ClickupConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CalendarConfig {
     pub personal_email: String,
+    #[serde(default)]
+    pub extra_calendars: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

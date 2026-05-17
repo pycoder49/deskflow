@@ -16,6 +16,7 @@ export interface AppConfig {
   };
   calendar: {
     personal_email: string;
+    extra_calendars: string[];
   };
   commands: {
     start_day_skill: string;

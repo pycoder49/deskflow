@@ -8,7 +8,8 @@
     ]
   },
   "calendar": {
-    "personal_email": ""
+    "personal_email": "",
+    "extra_calendars": ["Holidays in United States", "Birthdays"]
   },
   "commands": {
     "start_day_skill": "start-day"

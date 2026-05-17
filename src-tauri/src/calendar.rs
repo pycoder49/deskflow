@@ -3,17 +3,10 @@ use tokio::process::Command;
 
 use crate::config;
 
-// gcalcli display names (the `summary` field). Personal calendar comes from
-// `os-config.json`; secondary calendars (holidays, birthdays) are
-// edited in code below. `--calendar` flags must precede the subcommand.
-const EXTRA_CALENDARS: &[&str] = &[
-    "Holidays in United States",
-    "Birthdays",
-];
-
 fn calendars() -> Vec<String> {
-    let mut cals = vec![config::get().calendar.personal_email.clone()];
-    cals.extend(EXTRA_CALENDARS.iter().map(|s| s.to_string()));
+    let cfg = config::get();
+    let mut cals = vec![cfg.calendar.personal_email.clone()];
+    cals.extend(cfg.calendar.extra_calendars.iter().cloned());
     cals.into_iter().filter(|c| !c.is_empty()).collect()
 }
 
