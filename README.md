@@ -84,6 +84,14 @@ Written by the setup wizard. Gitignored. Hand-editable.
     "mode": "local_file",
     "clickup_logs_folder_id": "",
     "local_file_path": "logs/actions.md"
+  },
+  "ambience": {
+    "sounds": {
+      "cafe":      "https://www.youtube.com/watch?v=...",
+      "rain":      "https://www.youtube.com/watch?v=...",
+      "medieval":  "https://www.youtube.com/watch?v=...",
+      "cyberpunk": "https://www.youtube.com/watch?v=..."
+    }
   }
 }
 ```

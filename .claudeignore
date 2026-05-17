@@ -16,7 +16,4 @@ package-lock.json
 __pycache__/
 *.pyc
 
-# Personal data files
-notepad.md
-hot.md
-BUILD_NOTES.md
+
