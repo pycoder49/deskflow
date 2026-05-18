@@ -48,7 +48,7 @@ Build any file path from its name. Never `Glob` to "find" a known archetype.
 | ClickUp invoke wrappers (`getTodayTasks`, `completeTask`, etc.) | `src/lib/services/clickup.ts` |
 | `CalendarEvent`, `eventColor`, `getCalendarEvents` | `src/lib/services/calendar.ts` |
 | `logicalToday()` (4am-shifted date) | `src/lib/stores/refresh.ts` |
-| `clickupVersion`, `nowNextIds`, `todayIds`, `completedTasks` | `src/lib/stores/refresh.ts` |
+| `clickupVersion`, `completionVersion`, `bumpCompletion`, `nowNextIds`, `todayIds`, `completedTasks` | `src/lib/stores/refresh.ts` |
 | `startTaskPolling()` (30s loop) | `src/lib/stores/refresh.ts` |
 | `backgroundEffect` + `sectionEffect` (canvas overlay + section FX) | `src/lib/stores/ambience.ts` |
 | `theme` store + `cycle()` | `src/lib/stores/theme.ts` |
@@ -129,7 +129,8 @@ Match symptom keywords here BEFORE grepping. If no match here AND no match in `I
 | Spotify shows "No active playback" | HTTP 204 = no active Spotify session; open the app on any device first |
 | Notepad not saving | `src-tauri/src/notepad.rs` (path: `CARGO_MANIFEST_DIR/../`) |
 | Terminal widget hangs / wrong dir | `src-tauri/src/terminal.rs` (`cmd /C`, home dir) |
-| Today doc not appending | `clickup-state.json` date check (logical-day mismatch = silent no-op) |
+| Today doc not appending | `~/.claude/clickup-log-state.json` month cache mismatch — delete it to force re-resolution |
+| Start Day button shows "Already checked in" incorrectly | `clickup-state.json` (project root) date stale; also check `localStorage["checkin_<date>"]` in browser devtools |
 | Start Day button broken / runs wrong skill | `os-config.json::commands.start_day_skill` + `src-tauri/src/clickup.rs::start_day` (cwd is project root so project-local `.claude/skills/<name>/` resolves) |
 | Start Day moves nothing on re-click | Gate hit. State at `~/.claude/dashboard-state.json::last_start_day` matches today's logical day. Stats + calendar still refresh; move skipped. Run `python scripts/start_day.py --force` to bypass. |
 | `claude -p` shell-out fails on Windows | `src-tauri/src/clickup.rs` — must be `cmd /C claude`, stdin not args |

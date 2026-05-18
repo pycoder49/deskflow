@@ -58,7 +58,7 @@ export const updateTask    = (
 export const ensureLogDoc  = () =>
   invoke<void>('ensure_log_doc');
 
-export const startDay = () => invoke<void>('start_day');
+export const startDay = () => invoke<string>('start_day');
 
 export interface StatEntry {
   date: string;   // YYYY-MM-DD

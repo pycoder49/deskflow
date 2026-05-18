@@ -269,6 +269,11 @@ def main():
     CONFIG_FILE.write_text(json.dumps(config, indent=2), encoding="utf-8")
     print(f"\nWrote {CONFIG_FILE.name}")
 
+    state_file = PROJECT_ROOT / "clickup-state.json"
+    if not state_file.exists():
+        state_file.write_text(json.dumps({"date": "1970-01-01"}), encoding="utf-8")
+        print("[setup] clickup-state.json initialized")
+
     # Download ambient sounds (skips files already present / unchanged).
     print("\n[+] Downloading ambient sounds (10-min snippets from YouTube)…")
     download_script = PROJECT_ROOT / "scripts" / "download_sounds.py"

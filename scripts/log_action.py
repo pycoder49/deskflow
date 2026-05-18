@@ -225,10 +225,11 @@ def run_local_file(cfg: dict, header: str, entry: str, ensure_only: bool):
 def main():
     parser = argparse.ArgumentParser(description="Log a task action.")
     parser.add_argument("--ensure", action="store_true", help="Create/verify destination and exit (no entry)")
-    parser.add_argument("--action", default="", help="Action verb: complete, create, delete, update, uncheck, move")
+    parser.add_argument("--action", default="", help="Action verb: complete, create, delete, update, uncheck, move, retro")
     parser.add_argument("--task-name", default="", dest="task_name")
     parser.add_argument("--tags", default="", help="Comma-separated tag names")
     parser.add_argument("--details", default="", help="Extra detail (e.g. 'priority: normal → high')")
+    parser.add_argument("--date", default="", help="Override log date (YYYY-MM-DD); defaults to logical today (4am cutoff)")
     args = parser.parse_args()
 
     cfg = load_config()
@@ -237,7 +238,13 @@ def main():
     if mode == "none":
         return
 
-    today = logical_today()
+    if args.date:
+        try:
+            today = datetime.strptime(args.date, "%Y-%m-%d").date()
+        except ValueError:
+            sys.exit(f"Invalid --date format: {args.date!r}. Expected YYYY-MM-DD.")
+    else:
+        today = logical_today()
     header = date_header(today)
     tags = [t.strip() for t in args.tags.split(",") if t.strip()]
     entry = format_entry(args.action, args.task_name, tags, args.details or None) if args.action else ""

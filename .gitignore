@@ -51,6 +51,7 @@ BUILD.md
 LinkedIn.md
 projects.json
 os-config.json
+clickup-state.json
 
 # Downloaded ambient sounds (per-user; populated by scripts/download_sounds.py)
 static/sounds/

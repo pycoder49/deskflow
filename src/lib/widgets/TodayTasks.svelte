@@ -17,6 +17,7 @@
     unmarkCompleted,
     clearCompleted,
     bumpClickup,
+    bumpCompletion,
     nowNextIds,
     todayIds,
     pendingNewTask,
@@ -157,6 +158,7 @@
       unmarkCompleted(task.id);
       try {
         await uncheckTask(task.id, task.name, task.tags);
+        bumpCompletion();
         if (inNowNext) bumpClickup();
         // Only reload if task was already evicted from `tasks` by a prior server sync;
         // otherwise it pops back to the top via the sort in `display`.
@@ -169,6 +171,7 @@
       markCompleted(task);
       try {
         await completeTask(task.id, task.name, task.tags);
+        bumpCompletion();
         if (inNowNext) bumpClickup();
         // No reload — task sinks to bottom instantly via display sort.
       } catch (e) {

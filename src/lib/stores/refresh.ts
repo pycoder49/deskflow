@@ -20,6 +20,11 @@ export function logicalToday(): string {
 export const clickupVersion = writable(0);
 export const bumpClickup = () => clickupVersion.update(n => n + 1);
 
+// Bumped on every successful complete/uncheck — drives TaskStats real-time count
+// without triggering a NowNext re-pick (which clickupVersion does).
+export const completionVersion = writable(0);
+export const bumpCompletion = () => completionVersion.update(n => n + 1);
+
 // When a task is created in Daily To-Do, inject it directly into Today without
 // a server reload. Set suppressNextTodayLoad before bumpClickup so Today's
 // clickupVersion effect skips the load while NowNext still re-picks.

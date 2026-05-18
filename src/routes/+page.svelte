@@ -10,10 +10,11 @@
   import Ambience from '$lib/widgets/Ambience.svelte';
   import TaskStats from '$lib/widgets/TaskStats.svelte';
   import { startDay } from '$lib/services/clickup';
+  import { logicalToday } from '$lib/stores/refresh';
 
   let captureOpen = $state(false);
   let now = $state(new Date());
-  let logStatus = $state<'idle' | 'loading' | 'ok' | 'err'>('idle');
+  let logStatus = $state<'idle' | 'loading' | 'ok' | 'already' | 'err'>('idle');
   let overlayCanvas = $state<HTMLCanvasElement | null>(null);
   let animId = 0;
 
@@ -234,6 +235,10 @@
   });
 
   onMount(() => {
+    if (localStorage.getItem(`checkin_${logicalToday()}`) === 'done') {
+      logStatus = 'already';
+    }
+
     const interval = setInterval(() => { now = new Date(); }, 60_000);
     const resize = () => {
       if (overlayCanvas && $backgroundEffect !== 'none') {
@@ -246,12 +251,17 @@
   });
 
   async function runStartDay() {
-    if (logStatus === 'loading') return;
+    if (logStatus === 'loading' || logStatus === 'already') return;
     logStatus = 'loading';
     try {
-      await startDay();
-      logStatus = 'ok';
-      setTimeout(() => { logStatus = 'idle'; }, 3000);
+      const status = await startDay();
+      localStorage.setItem(`checkin_${logicalToday()}`, 'done');
+      if (status === 'already') {
+        logStatus = 'already';
+      } else {
+        logStatus = 'ok';
+        setTimeout(() => { logStatus = 'idle'; }, 3000);
+      }
     } catch {
       logStatus = 'err';
       setTimeout(() => { logStatus = 'idle'; }, 3000);
@@ -293,11 +303,11 @@
       <!-- Start Day: ensures this month's log doc exists in ClickUp Logs folder -->
       <button
         class="px-3 py-1.5 rounded-md border text-sm transition flex items-center gap-1.5
-               {logStatus === 'ok' ? 'border-green-500 text-green-500' :
+               {logStatus === 'ok' || logStatus === 'already' ? 'border-green-500 text-green-500' :
                 logStatus === 'err' ? 'border-red-400 text-red-400' :
                 'border-line text-mute hover:text-ink hover:bg-surface'}"
         onclick={runStartDay}
-        disabled={logStatus === 'loading'}
+        disabled={logStatus === 'loading' || logStatus === 'already'}
         title="Run your start-of-day Claude skill"
       >
         {#if logStatus === 'loading'}
@@ -307,6 +317,8 @@
           <span>Checking in…</span>
         {:else if logStatus === 'ok'}
           <span>✓ Checked in</span>
+        {:else if logStatus === 'already'}
+          <span>✓ Already checked in</span>
         {:else if logStatus === 'err'}
           <span>Check-in failed</span>
         {:else}
@@ -350,8 +362,8 @@
           <NowNext />
         </section>
       </div>
-      <!-- Row 2: Stats — ~13% of height -->
-      <section class="bg-surface border border-line rounded-xl p-5" style="flex: 1; min-height: 0;">
+      <!-- Row 2: Stats — ~15% of height -->
+      <section class="bg-surface border border-line rounded-xl p-5" style="flex: 1.2; min-height: 0;">
         <TaskStats />
       </section>
       <!-- Row 3: Calendar — ~47% of height -->

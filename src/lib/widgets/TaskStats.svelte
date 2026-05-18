@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getTaskStats, getCompletedTodayTasks, PRIORITY_META, type StatEntry, type Task } from '$lib/services/clickup';
-  import { clickupVersion } from '$lib/stores/refresh';
+  import { clickupVersion, completionVersion } from '$lib/stores/refresh';
 
   let stats     = $state<StatEntry[]>([]);
   let doneTasks = $state<Task[]>([]);
@@ -16,13 +16,27 @@
     getCompletedTodayTasks().then(t => { doneTasks = t; });
   });
 
-  const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  $effect(() => {
+    $completionVersion;
+    getCompletedTodayTasks().then(t => { doneTasks = t; });
+  });
 
-  const data   = $derived(stats.map(s => s.count));
+  const DAY_ABBR = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+  const DAY_FULL = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  const data = $derived.by(() => {
+    const d = stats.map(s => s.count);
+    if (d.length > 0) d[d.length - 1] = doneTasks.length;
+    return d;
+  });
   const labels = $derived(stats.map(s => {
     const [y, m, d] = s.date.split('-').map(Number);
     const dow = new Date(y, m - 1, d).getDay();
-    return `${DAY_ABBR[dow]} ${m}/${d}`;
+    return `${DAY_FULL[dow]} ${m}/${d}`;
+  }));
+  const dayLabels = $derived(stats.map(s => {
+    const [y, m, d] = s.date.split('-').map(Number);
+    return DAY_ABBR[new Date(y, m - 1, d).getDay()];
   }));
 
   const max = $derived(Math.max(...data, 1));
@@ -31,10 +45,11 @@
   let cw = $state(0);
   let ch = $state(0);
 
-  const PAD_T = 10;
-  const PAD_B = 8;
+  const PAD_T = 18;
+  const PAD_B = 16;
 
   const chartH = $derived(ch - PAD_T - PAD_B);
+  const baseY  = $derived(PAD_T + chartH);
 
   // ── Line view ────────────────────────────────────────────────────────────────
   const pts = $derived(
@@ -46,12 +61,16 @@
       : []
   );
 
-  const line = $derived(pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' '));
-  const area = $derived(
-    pts.length ? `${line} L${cw},${PAD_T + chartH} L0,${PAD_T + chartH} Z` : ''
+  const smoothLine = $derived(
+    pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')
   );
 
   // ── Bars view ────────────────────────────────────────────────────────────────
+  function topRoundedRect(x: number, y: number, w: number, h: number, r: number): string {
+    const cr = Math.min(r, h, w / 2);
+    return `M${x+cr},${y} h${w-2*cr} a${cr},${cr} 0 0 1 ${cr},${cr} v${h-cr} h${-w} v${-(h-cr)} a${cr},${cr} 0 0 1 ${cr},${-cr} z`;
+  }
+
   const BAR_GAP = 3;
   const bars = $derived(
     cw && ch && n > 0
@@ -59,20 +78,20 @@
           const slotW = cw / n;
           const barW  = Math.max(4, slotW - BAR_GAP);
           const barH  = Math.max(v === 0 ? 0 : 2, (v / max) * chartH);
+          const y     = PAD_T + chartH - barH;
           return {
             x: i * slotW + (slotW - barW) / 2,
-            y: PAD_T + chartH - barH,
+            y,
             w: barW,
             h: barH,
             v,
             label: labels[i],
+            dayLabel: dayLabels[i],
+            isLast: i === n - 1,
+            path: barH > 0 ? topRoundedRect(i * slotW + (slotW - barW) / 2, y, barW, barH, 3) : '',
           };
         })
       : []
-  );
-
-  const gridYs = $derived(
-    ch ? [0.25, 0.5, 0.75].map(f => PAD_T + (1 - f) * chartH) : []
   );
 
   let hovered = $state<{ x: number; y: number; value: number; label: string } | null>(null);
@@ -138,40 +157,84 @@
               <stop offset="0%"   stop-color="var(--color-chart-b)" />
               <stop offset="100%" stop-color="var(--color-chart-a)" />
             </linearGradient>
-            <linearGradient id="stat-area" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2={ch}>
-              <stop offset="0%"   stop-color="var(--color-chart-a)" stop-opacity="0.5" />
-              <stop offset="100%" stop-color="var(--color-chart-b)" stop-opacity="0.08" />
-            </linearGradient>
-            <linearGradient id="stat-bar" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2={ch}>
+            <linearGradient id="stat-bar" gradientUnits="objectBoundingBox" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%"   stop-color="var(--color-chart-a)" stop-opacity="0.9" />
-              <stop offset="100%" stop-color="var(--color-chart-b)" stop-opacity="0.5" />
+              <stop offset="100%" stop-color="var(--color-chart-b)" stop-opacity="0.6" />
+            </linearGradient>
+            <linearGradient id="stat-track" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2={ch}>
+              <stop offset="0%"   stop-color="var(--color-chart-a)" stop-opacity="0.07" />
+              <stop offset="100%" stop-color="var(--color-chart-b)" stop-opacity="0.03" />
             </linearGradient>
           </defs>
 
-          <!-- Gridlines -->
-          {#each gridYs as y}
-            <line x1="0" y1={y} x2={cw} y2={y} stroke="var(--color-line)" stroke-width="1" stroke-opacity="0.35" />
-          {/each}
+          <!-- Baseline -->
+          <line x1="0" y1={baseY} x2={cw} y2={baseY}
+            stroke="var(--color-line)" stroke-width="1" />
+
+          <!-- Mid gridline (dashed) -->
+          {#if ch}
+            <line
+              x1="0" y1={PAD_T + chartH * 0.5}
+              x2={cw} y2={PAD_T + chartH * 0.5}
+              stroke="var(--color-line)" stroke-width="1"
+              stroke-dasharray="2 5" stroke-opacity="0.45"
+            />
+          {/if}
 
           {#if view === 'line'}
-            <path d={area} fill="url(#stat-area)" />
+            <!-- Vertical drop lines: thin dashes from each point to baseline -->
+            {#each pts as p}
+              <line
+                x1={p.x} y1={p.y + 7}
+                x2={p.x} y2={baseY}
+                stroke="var(--color-chart-a)"
+                stroke-width="1"
+                stroke-dasharray="1.5 3"
+                stroke-opacity="0.17"
+              />
+            {/each}
+
+            <!-- Smooth bezier line -->
             <path
-              d={line}
+              d={smoothLine}
               fill="none"
               stroke="url(#stat-line)"
-              stroke-width="2.5"
+              stroke-width="1.5"
               stroke-linejoin="round"
               stroke-linecap="round"
             />
+
+            <!-- Dots, labels, hit targets -->
             {#each pts as p, i}
               {#if i === pts.length - 1}
-                <circle cx={p.x} cy={p.y} r="7"   fill="var(--color-chart-a)" fill-opacity="0.18" />
+                <!-- Today: pulse ring + filled dot + count badge -->
+                <circle cx={p.x} cy={p.y} r="6" class="pulse-ring"
+                  fill="none" stroke="var(--color-chart-a)" stroke-width="1" />
                 <circle cx={p.x} cy={p.y} r="3.5" fill="var(--color-chart-a)" />
+                <text
+                  x={p.x} y={p.y - 9}
+                  text-anchor="middle"
+                  fill="var(--color-chart-a)"
+                  font-size="9"
+                  font-family="var(--font-mono)"
+                  font-weight="600"
+                >{data[i]}</text>
+              {:else if hovered?.label === labels[i]}
+                <!-- Hovered: solid fill -->
+                <circle cx={p.x} cy={p.y} r="3" fill="var(--color-chart-a)" />
               {:else}
-                <circle cx={p.x} cy={p.y} r="2.5" fill="url(#stat-line)" />
+                <!-- Past: hollow ring -->
+                <circle
+                  cx={p.x} cy={p.y} r="2"
+                  fill="none"
+                  stroke="var(--color-chart-a)"
+                  stroke-width="1.5"
+                  stroke-opacity="0.4"
+                />
               {/if}
+              <!-- Hit target -->
               <circle
-                cx={p.x} cy={p.y} r="12"
+                cx={p.x} cy={p.y} r="14"
                 fill="transparent"
                 class="cursor-default"
                 onmouseenter={() => hovered = { x: p.x, y: p.y, value: data[i], label: labels[i] }}
@@ -179,11 +242,52 @@
               />
             {/each}
 
+            <!-- X-axis day labels -->
+            {#each pts as p, i}
+              <text
+                x={p.x} y={baseY + 12}
+                text-anchor="middle"
+                fill="var(--color-mute)"
+                font-size="8"
+                font-family="var(--font-mono)"
+                opacity={i === pts.length - 1 ? '1' : '0.55'}
+              >{dayLabels[i]}</text>
+            {/each}
+
           {:else}
+            <!-- Bars + day labels -->
             {#each bars as b}
-              {#if b.h > 0}
-                <rect x={b.x} y={b.y} width={b.w} height={b.h} rx="3" ry="3" fill="url(#stat-bar)" />
+              <!-- Actual bar -->
+              {#if b.path}
+                <path
+                  d={b.path}
+                  fill="url(#stat-bar)"
+                  opacity={hovered && hovered.label !== b.label ? '0.3' : b.isLast ? '1' : '0.72'}
+                  style="transition: opacity 0.15s"
+                />
               {/if}
+              <!-- Value above today's or hovered bar -->
+              {#if (b.isLast || hovered?.label === b.label) && b.v > 0}
+                <text
+                  x={b.x + b.w / 2} y={b.h > 0 ? b.y - 5 : PAD_T + 10}
+                  text-anchor="middle"
+                  fill="var(--color-chart-a)"
+                  font-size="9"
+                  font-family="var(--font-mono)"
+                  font-weight="600"
+                >{b.v}</text>
+              {/if}
+              <!-- Day label -->
+              <text
+                x={b.x + b.w / 2} y={baseY + 12}
+                text-anchor="middle"
+                fill="var(--color-mute)"
+                font-size="8"
+                font-family="var(--font-mono)"
+                opacity={hovered && hovered.label !== b.label ? '0.3' : b.isLast ? '1' : '0.55'}
+                style="transition: opacity 0.15s"
+              >{b.dayLabel}</text>
+              <!-- Hit target -->
               <rect
                 x={b.x} y={PAD_T}
                 width={b.w} height={chartH}
@@ -196,12 +300,16 @@
           {/if}
         </svg>
 
+        <!-- Tooltip pill -->
         {#if hovered}
           <div
-            class="absolute pointer-events-none z-10 bg-surface border border-line rounded-md px-2 py-1 text-xs text-ink shadow-md whitespace-nowrap"
-            style="left:{hovered.x}px;top:{hovered.y}px;transform:translate(-50%,calc(-100% - 8px))"
+            class="absolute pointer-events-none z-10 whitespace-nowrap"
+            style="left:{hovered.x}px;top:{hovered.y}px;transform:translate(-50%,calc(-100% - 10px))"
           >
-            {hovered.value} task{hovered.value === 1 ? '' : 's'} · {hovered.label}
+            <div style="font-family:var(--font-mono);font-size:10px;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--color-surface) 88%,transparent);border:1px solid color-mix(in srgb,var(--color-line) 70%,transparent);color:var(--color-ink);backdrop-filter:blur(6px)">
+              <span style="color:var(--color-chart-a);font-weight:700">{hovered.value}</span>
+              <span style="color:var(--color-mute)"> · {hovered.label}</span>
+            </div>
           </div>
         {/if}
       {:else}
@@ -210,3 +318,15 @@
     </div>
   {/if}
 </div>
+
+<style>
+  @keyframes pulse-ring {
+    0%   { transform: scale(0.3); opacity: 0.75; }
+    100% { transform: scale(2.4); opacity: 0; }
+  }
+  .pulse-ring {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: pulse-ring 2.8s ease-out infinite;
+  }
+</style>

@@ -558,10 +558,25 @@ pub async fn update_task(
 }
 
 #[tauri::command]
-pub async fn start_day() -> Result<(), String> {
+pub async fn start_day() -> Result<String, String> {
+    let project_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+
+    // Gate: skip skill invocation if already checked in today (4am logical day).
+    let shifted = chrono::Local::now() - chrono::Duration::hours(4);
+    let today_str = shifted.format("%Y-%m-%d").to_string();
+    let state_path = project_root.join("clickup-state.json");
+    if state_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&state_path) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                if json.get("date").and_then(|d| d.as_str()) == Some(today_str.as_str()) {
+                    return Ok("already".to_string());
+                }
+            }
+        }
+    }
+
     let skill = config::get().commands.start_day_skill.clone();
     let arg = format!("/{skill}");
-    let project_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
 
     #[cfg(windows)]
     let mut cmd = {
@@ -592,7 +607,7 @@ pub async fn start_day() -> Result<(), String> {
         return Err(format!("start-day exited {}: {stderr}", output.status));
     }
 
-    Ok(())
+    Ok("ok".to_string())
 }
 
 #[derive(Serialize)]
@@ -618,7 +633,7 @@ pub async fn get_task_stats() -> Result<Vec<StatEntry>, String> {
 
     let logical_today = chrono::Local::now() - chrono::Duration::hours(4);
     let mut entries = Vec::new();
-    for days_ago in (1..15i64).rev() {
+    for days_ago in (0..14i64).rev() {
         let day = logical_today - chrono::Duration::days(days_ago);
         let date = day.date_naive().to_string();
         let count = map.get(&date).copied().unwrap_or(0);
