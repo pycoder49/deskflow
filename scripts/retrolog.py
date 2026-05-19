@@ -49,7 +49,7 @@ def build_entry(focus: str, tasks: list[str], projects: str, notes: str) -> str:
         lines.append(f"**Projects:** {projects}")
     if notes:
         lines.append(f"**Notes:** {notes}")
-    return "\n".join(lines)
+    return "\n" + "\n".join(lines)
 
 
 def main():

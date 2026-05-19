@@ -212,6 +212,30 @@ async fn call_claude_cli(prompt: &str) -> Result<String, String> {
         .map_err(|e| format!("claude stdout was not valid UTF-8: {e}"))
 }
 
+async fn update_today_stats(delta: i64) {
+    let stats_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../task-stats.json");
+
+    let mut map: std::collections::HashMap<String, i64> = if stats_path.exists() {
+        tokio::fs::read_to_string(&stats_path)
+            .await
+            .ok()
+            .and_then(|c| serde_json::from_str(&c).ok())
+            .unwrap_or_default()
+    } else {
+        std::collections::HashMap::new()
+    };
+
+    let logical_today = chrono::Local::now() - chrono::Duration::hours(4);
+    let today_str = logical_today.date_naive().to_string();
+    let count = map.entry(today_str).or_insert(0);
+    *count = (*count + delta).max(0);
+
+    if let Ok(json) = serde_json::to_string_pretty(&map) {
+        let _ = tokio::fs::write(&stats_path, json).await;
+    }
+}
+
 async fn log_action(action: &str, task_name: &str, tags: &[TaskTag], details: Option<&str>) {
     let script = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../scripts/log_action.py");
@@ -470,6 +494,7 @@ pub async fn complete_task(task_id: String, task_name: String, tags: Vec<TaskTag
         .await
         .map_err(|e| e.to_string())?;
 
+    update_today_stats(1).await;
     log_action("complete", &task_name, &tags, None).await;
     Ok(())
 }
@@ -486,6 +511,7 @@ pub async fn uncheck_task(task_id: String, task_name: String, tags: Vec<TaskTag>
         .await
         .map_err(|e| e.to_string())?;
 
+    update_today_stats(-1).await;
     log_action("uncheck", &task_name, &tags, None).await;
     Ok(())
 }

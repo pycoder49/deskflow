@@ -45,7 +45,7 @@
   let cw = $state(0);
   let ch = $state(0);
 
-  const PAD_T = 18;
+  const PAD_T = 10;
   const PAD_B = 16;
 
   const chartH = $derived(ch - PAD_T - PAD_B);
