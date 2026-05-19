@@ -557,11 +557,38 @@ pub async fn update_task(
     Ok(())
 }
 
+// Append-only log of every Start Day spawn — both the deterministic Python
+// bootstrap and the AI skill run. Without this, claude -p failures were
+// invisible (stderr was dropped) and the dashboard silently regressed.
+fn append_start_day_log(project_root: &std::path::Path, phase: &str, stdout: &[u8], stderr: &[u8], exit: Option<i32>) {
+    use std::io::Write;
+    let log_dir = project_root.join("logs");
+    if std::fs::create_dir_all(&log_dir).is_err() {
+        return;
+    }
+    let log_path = log_dir.join("check-in.log");
+    let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) else {
+        return;
+    };
+    let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+    let code = exit.map_or_else(|| "?".to_string(), |c| c.to_string());
+    let _ = writeln!(f, "─── [{ts}] {phase} (exit={code}) ───");
+    if !stdout.is_empty() {
+        let _ = writeln!(f, "STDOUT:\n{}", String::from_utf8_lossy(stdout));
+    }
+    if !stderr.is_empty() {
+        let _ = writeln!(f, "STDERR:\n{}", String::from_utf8_lossy(stderr));
+    }
+    let _ = writeln!(f);
+}
+
 #[tauri::command]
 pub async fn start_day() -> Result<String, String> {
     let project_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
 
-    // Gate: skip skill invocation if already checked in today (4am logical day).
+    // Gate: skip everything if already checked in today (4am logical day).
+    // The AI skill is responsible for writing this — so a failed prior run
+    // leaves the gate open and the next click retries.
     let shifted = chrono::Local::now() - chrono::Duration::hours(4);
     let today_str = shifted.format("%Y-%m-%d").to_string();
     let state_path = project_root.join("clickup-state.json");
@@ -575,19 +602,64 @@ pub async fn start_day() -> Result<String, String> {
         }
     }
 
+    // Phase 1 — Deterministic bootstrap. Backfills task-stats.json via direct
+    // ClickUp HTTP. Idempotent. If this fails, the whole click fails so the
+    // user can retry; the chart's correctness can't depend on AI succeeding.
+    let bootstrap_script = project_root.join("scripts").join("start_day.py");
+
+    #[cfg(windows)]
+    let mut boot_cmd = {
+        let mut c = tokio::process::Command::new("cmd");
+        c.args(["/C", "python"]);
+        c.arg(&bootstrap_script);
+        c
+    };
+    #[cfg(not(windows))]
+    let mut boot_cmd = {
+        let mut c = tokio::process::Command::new("python3");
+        c.arg(&bootstrap_script);
+        c
+    };
+
+    boot_cmd
+        .arg("--bootstrap")
+        .current_dir(&project_root)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+
+    let boot_out = boot_cmd
+        .output()
+        .await
+        .map_err(|e| format!("bootstrap spawn failed: {e}"))?;
+
+    append_start_day_log(&project_root, "bootstrap", &boot_out.stdout, &boot_out.stderr, boot_out.status.code());
+
+    if !boot_out.status.success() {
+        let stderr = String::from_utf8_lossy(&boot_out.stderr);
+        return Err(format!("bootstrap exited {}: {stderr}", boot_out.status));
+    }
+
+    // Gate owned by Rust: mark today checked-in before the skill fires.
+    // A failed skill does not reopen the gate.
+    let state_json = format!(r#"{{"date": "{}"}}"#, today_str);
+    std::fs::write(&state_path, &state_json)
+        .map_err(|e| format!("failed to write clickup-state.json: {e}"))?;
+
+    // Phase 2 — AI skill: move decisions + retro log entries.
     let skill = config::get().commands.start_day_skill.clone();
     let arg = format!("/{skill}");
 
     #[cfg(windows)]
     let mut cmd = {
         let mut c = tokio::process::Command::new("cmd");
-        c.args(["/C", "claude", "-p", &arg]);
+        c.args(["/C", "claude", "-p", &arg, "--output-format", "json"]);
         c
     };
     #[cfg(not(windows))]
     let mut cmd = {
         let mut c = tokio::process::Command::new("claude");
-        c.args(["-p", &arg]);
+        c.args(["-p", &arg, "--output-format", "json"]);
         c
     };
 
@@ -596,11 +668,39 @@ pub async fn start_day() -> Result<String, String> {
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
 
-    let child = cmd.spawn().map_err(|e| format!("failed to spawn claude: {e}"))?;
+    let child = cmd.spawn().map_err(|e| {
+        let msg = format!("failed to spawn claude: {e}");
+        append_start_day_log(&project_root, &format!("skill:{skill}"), msg.as_bytes(), b"", None);
+        msg
+    })?;
     let output = child
         .wait_with_output()
         .await
-        .map_err(|e| format!("start-day failed: {e}"))?;
+        .map_err(|e| {
+            let msg = format!("start-day wait failed: {e}");
+            append_start_day_log(&project_root, &format!("skill:{skill}"), msg.as_bytes(), b"", None);
+            msg
+        })?;
+
+    append_start_day_log(&project_root, &format!("skill:{skill}"), &output.stdout, &output.stderr, output.status.code());
+
+    // Parse token usage from JSON output and append a summary line.
+    if let Ok(stdout_str) = std::str::from_utf8(&output.stdout) {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(stdout_str) {
+            let cost = json.get("total_cost_usd").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let duration_ms = json.get("duration_ms").and_then(|v| v.as_u64()).unwrap_or(0);
+            let usage = json.get("usage");
+            let input = usage.and_then(|u| u.get("input_tokens")).and_then(|v| v.as_u64()).unwrap_or(0);
+            let output_tok = usage.and_then(|u| u.get("output_tokens")).and_then(|v| v.as_u64()).unwrap_or(0);
+            let cache_read = usage.and_then(|u| u.get("cache_read_input_tokens")).and_then(|v| v.as_u64()).unwrap_or(0);
+            let cache_create = usage.and_then(|u| u.get("cache_creation_input_tokens")).and_then(|v| v.as_u64()).unwrap_or(0);
+            let total = input + output_tok + cache_read + cache_create;
+            let summary = format!(
+                "tokens: total={total} in={input} out={output_tok} cache_read={cache_read} cache_write={cache_create} | cost=${cost:.4} | {duration_ms}ms\n"
+            );
+            append_start_day_log(&project_root, &format!("skill:{skill} usage"), summary.as_bytes(), b"", None);
+        }
+    }
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -618,9 +718,8 @@ pub struct StatEntry {
 
 #[tauri::command]
 pub async fn get_task_stats() -> Result<Vec<StatEntry>, String> {
-    let stats_path = dirs::home_dir()
-        .ok_or("no home dir")?
-        .join(".claude/task-stats.json");
+    let stats_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../task-stats.json");
 
     let map: std::collections::HashMap<String, i64> = if stats_path.exists() {
         let content = tokio::fs::read_to_string(&stats_path)

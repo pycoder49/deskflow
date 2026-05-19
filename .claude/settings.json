@@ -1,6 +1,14 @@
 {
-  "allowedTools": [
-    "Bash(gcalcli *)",
-    "Bash(python *log_action.py*)"
-  ]
+  "permissions": {
+    "allow": [
+      "Bash(gcalcli *)",
+      "Bash(python *log_action.py*)",
+      "Bash(python *start_day.py*)",
+      "Read(./task-stats.json)",
+      "Read(./clickup-state.json)",
+      "Read(./os-config.json)",
+      "Bash(python *start_day.py --moves-only*)",
+      "Bash(python *retrolog.py*)"
+    ]
+  }
 }

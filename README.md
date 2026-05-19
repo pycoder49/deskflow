@@ -146,7 +146,7 @@ scripts/              Setup wizard, action logger, sound downloader
 
 **Start Day button does nothing.** Verify `commands.start_day_skill` in `os-config.json` and that `claude -p "/<that-skill>"` works when run from the project root.
 
-**TaskStats chart frozen on demo data.** The chart populates from Start Day clicks (records yesterday + backfills missed days). Click it daily — or write a `/check-out` skill that calls `scripts/record_stats.py --count N`.
+**TaskStats chart frozen on demo data.** The chart populates from Start Day clicks (the Rust spawn runs `scripts/start_day.py --bootstrap` first, which records yesterday + backfills any missing days in the last 14 via direct ClickUp queries). Click Start Day each morning.
 
 ---
 

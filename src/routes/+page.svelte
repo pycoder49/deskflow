@@ -10,7 +10,6 @@
   import Ambience from '$lib/widgets/Ambience.svelte';
   import TaskStats from '$lib/widgets/TaskStats.svelte';
   import { startDay } from '$lib/services/clickup';
-  import { logicalToday } from '$lib/stores/refresh';
 
   let captureOpen = $state(false);
   let now = $state(new Date());
@@ -235,10 +234,6 @@
   });
 
   onMount(() => {
-    if (localStorage.getItem(`checkin_${logicalToday()}`) === 'done') {
-      logStatus = 'already';
-    }
-
     const interval = setInterval(() => { now = new Date(); }, 60_000);
     const resize = () => {
       if (overlayCanvas && $backgroundEffect !== 'none') {
@@ -255,7 +250,6 @@
     logStatus = 'loading';
     try {
       const status = await startDay();
-      localStorage.setItem(`checkin_${logicalToday()}`, 'done');
       if (status === 'already') {
         logStatus = 'already';
       } else {

@@ -62,7 +62,6 @@ Build any file path from its name. Never `Glob` to "find" a known archetype.
 | `cmd /C` shell runner | `src-tauri/src/terminal.rs` |
 | Spotify OAuth + `Playlist` (incl. `last_played_at`), MRU sort via `/me/player/recently-played`, `SCOPES_ENC` | `src-tauri/src/spotify.rs` |
 | ClickUp log doc append (4am-aware) | `scripts/log_action.py` |
-| Task stats writer | `scripts/record_stats.py` |
 | Tauri permission scopes | `src-tauri/capabilities/default.json` |
 | Window size, app identifier | `src-tauri/tauri.conf.json` |
 
@@ -130,9 +129,9 @@ Match symptom keywords here BEFORE grepping. If no match here AND no match in `I
 | Notepad not saving | `src-tauri/src/notepad.rs` (path: `CARGO_MANIFEST_DIR/../`) |
 | Terminal widget hangs / wrong dir | `src-tauri/src/terminal.rs` (`cmd /C`, home dir) |
 | Today doc not appending | `~/.claude/clickup-log-state.json` month cache mismatch — delete it to force re-resolution |
-| Start Day button shows "Already checked in" incorrectly | `clickup-state.json` (project root) date stale; also check `localStorage["checkin_<date>"]` in browser devtools |
+| Start Day button shows "Already checked in" incorrectly | `clickup-state.json` (project root) date stale — Rust writes it after bootstrap, before skill fires. Skill does NOT write it. |
 | Start Day button broken / runs wrong skill | `os-config.json::commands.start_day_skill` + `src-tauri/src/clickup.rs::start_day` (cwd is project root so project-local `.claude/skills/<name>/` resolves) |
-| Start Day moves nothing on re-click | Gate hit. State at `~/.claude/dashboard-state.json::last_start_day` matches today's logical day. Stats + calendar still refresh; move skipped. Run `python scripts/start_day.py --force` to bypass. |
+| Start Day "succeeded" but stats / state / logs unchanged | Check `logs/check-in.log` for the AI phase's stderr — likely a denied tool call in `claude -p` mode. Add the missing pattern to `.claude/settings.json::permissions.allow`. Stats themselves should still be correct (Python `--bootstrap` phase runs first). |
 | `claude -p` shell-out fails on Windows | `src-tauri/src/clickup.rs` — must be `cmd /C claude`, stdin not args |
 | Emoji / unicode crash in calendar | `src-tauri/src/calendar.rs` (`PYTHONIOENCODING=utf-8`) |
 
@@ -167,6 +166,7 @@ Grep ONLY if (a) the term isn't in Symbol Lookup, (b) the symptom isn't in Bug M
 **AI Shell-Out (`claude -p`)**
 - Windows: `cmd /C claude ...` (CreateProcess can't resolve npm `.cmd` shims)
 - Pass prompt via stdin, not args (avoids quoting hell)
+- Non-interactive `-p` mode can't prompt for permissions — denied tool calls fail silently and the model often exits 0 anyway. Every Bash pattern, Read path outside project root, and Write the spawned skill touches must be in `.claude/settings.json::permissions.allow` or it will be silently dropped. `start_day` captures stdout/stderr to `logs/check-in.log` so these failures are debuggable.
 - Use `extract_json()` to tolerate stray prose / code fences from model
 - Default model: Sonnet — downgrade to Haiku only on latency/cost pressure
 

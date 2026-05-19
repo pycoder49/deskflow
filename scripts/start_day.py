@@ -7,14 +7,20 @@ Three job groups:
      fills any missing days in the last 14 by querying ClickUp.
   2. Calendar pull — today's events via `gcalcli` for the personal calendar.
   3. Task moves — incomplete area-list tasks → daily list, tagged + logged.
-     Gated to once per logical day via ~/.claude/dashboard-state.json.
 
-Three operating modes:
+The Rust `start_day` command's `clickup-state.json` check is the single gate
+that prevents repeated runs in a logical day; this script runs unconditionally
+whenever invoked.
+
+Four operating modes:
+  --bootstrap   Stats refresh only — no calendar, no moves, no JSON output.
+                Deterministic safety net the Rust `start_day` command runs
+                before invoking the AI skill.
   --audit       Emits a JSON snapshot (stats summary + calendar + per-area
                 task inventory) to stdout. Refreshes stats; does NOT move.
                 Intended for the /start-day skill to consume.
-  --moves-only  Skips stats refresh + calendar display. Just runs the gated
-                move step. Pair with --skip "id1,id2" to defer specific tasks.
+  --moves-only  Skips stats refresh + calendar display. Runs the move step.
+                Pair with --skip "id1,id2" to defer specific tasks.
   (default)     All three groups, with terminal-friendly output.
 
 Reads os-config.json for ClickUp IDs + calendar email, and .env for the token.
@@ -34,8 +40,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ENV_FILE = PROJECT_ROOT / ".env"
 CONFIG_FILE = PROJECT_ROOT / "os-config.json"
 LOG_ACTION = PROJECT_ROOT / "scripts" / "log_action.py"
-STATE_FILE = Path.home() / ".claude" / "dashboard-state.json"
-STATS_FILE = Path.home() / ".claude" / "task-stats.json"
+STATS_FILE = PROJECT_ROOT / "task-stats.json"
 BASE = "https://api.clickup.com/api/v2"
 
 
@@ -64,29 +69,6 @@ def hdrs(token: str) -> dict:
 
 def logical_today_date():
     return (datetime.now() - timedelta(hours=4)).date()
-
-
-# ─── Gate (idempotency for the move step) ────────────────────────────────────
-def already_moved_today() -> bool:
-    if not STATE_FILE.exists():
-        return False
-    try:
-        state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
-    except Exception:
-        return False
-    return state.get("last_start_day") == logical_today_date().strftime("%Y-%m-%d")
-
-
-def mark_moved_today() -> None:
-    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    state = {}
-    if STATE_FILE.exists():
-        try:
-            state = json.loads(STATE_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    state["last_start_day"] = logical_today_date().strftime("%Y-%m-%d")
-    STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
 
 # ─── Stats (refresh yesterday + backfill missing) ────────────────────────────
@@ -312,14 +294,25 @@ def do_moves(token: str, cfg: dict, skip_ids: set) -> tuple:
                 skipped += 1
                 continue
             if move_task(token, task["id"], daily_list_id):
-                tag_task(token, task["id"], slug)
-                log_move(task["name"], slug)
+                existing = {t.get("name", "").lower() for t in task.get("tags", [])}
+                if slug and slug.lower() not in existing:
+                    tag_task(token, task["id"], slug)
                 moved += 1
 
     return moved, skipped, touched_areas
 
 
 # ─── Modes ───────────────────────────────────────────────────────────────────
+def do_bootstrap(token: str, cfg: dict) -> int:
+    """Deterministic safety net for the dashboard's Start Day button.
+    Refreshes task-stats.json (the chart's source of truth) via direct ClickUp
+    HTTP. No calendar, no moves, no JSON output — just stats. Runs before the
+    AI skill so the chart stays correct even if the skill flakes."""
+    s = update_completion_stats(token, cfg)
+    print(f"[bootstrap] yesterday={s['yesterday_count']} backfilled={s['backfilled_days']}")
+    return 0
+
+
 def do_audit(token: str, cfg: dict) -> None:
     """Refresh stats + pull calendar + build task inventory; emit JSON."""
     stats_result = update_completion_stats(token, cfg)
@@ -337,7 +330,6 @@ def do_audit(token: str, cfg: dict) -> None:
 
     audit = {
         "logical_today": logical_today_date().strftime("%Y-%m-%d"),
-        "already_moved_today": already_moved_today(),
         "stats": stats_result,
         "calendar": events,
         "areas": areas_inventory,
@@ -345,7 +337,7 @@ def do_audit(token: str, cfg: dict) -> None:
     print(json.dumps(audit, indent=2))
 
 
-def do_default(token: str, cfg: dict, skip_ids: set, force: bool, moves_only: bool) -> int:
+def do_default(token: str, cfg: dict, skip_ids: set, moves_only: bool) -> int:
     if not moves_only:
         print("Updating completion stats…")
         s = update_completion_stats(token, cfg)
@@ -356,12 +348,7 @@ def do_default(token: str, cfg: dict, skip_ids: set, force: bool, moves_only: bo
 
         print_calendar(fetch_today_calendar(cfg.get("calendar", {}).get("personal_email", "")))
 
-    if already_moved_today() and not force:
-        print("\nTask moves already done today — skipping. (Use --force to re-run.)")
-        return 0
-
     moved, skipped, areas = do_moves(token, cfg, skip_ids)
-    mark_moved_today()
     line = f"\nMoved {moved} tasks from {areas} area lists to Daily To-Do"
     if skipped:
         line += f" ({skipped} deferred)"
@@ -372,14 +359,15 @@ def do_default(token: str, cfg: dict, skip_ids: set, force: bool, moves_only: bo
 # ─── Main ────────────────────────────────────────────────────────────────────
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--bootstrap", action="store_true",
+                        help="Refresh task-stats.json only — no calendar, no moves, no JSON. "
+                             "Deterministic safety net for the dashboard's Start Day button.")
     parser.add_argument("--audit", action="store_true",
                         help="Emit JSON snapshot (stats, calendar, task inventory) and exit. No moves.")
     parser.add_argument("--moves-only", action="store_true",
-                        help="Skip stats refresh + calendar; just do the gated move step.")
+                        help="Skip stats refresh + calendar; just do the move step.")
     parser.add_argument("--skip", default="",
                         help="Comma-separated task IDs to NOT move (defer to their area list).")
-    parser.add_argument("--force", action="store_true",
-                        help="Bypass once-per-day gate on the move step.")
     args = parser.parse_args()
 
     token = load_token()
@@ -388,12 +376,15 @@ def main() -> int:
     if not cfg["clickup"].get("daily_list_id"):
         sys.exit("clickup.daily_list_id is empty in os-config.json")
 
+    if args.bootstrap:
+        return do_bootstrap(token, cfg)
+
     if args.audit:
         do_audit(token, cfg)
         return 0
 
     skip_ids = {s.strip() for s in args.skip.split(",") if s.strip()}
-    return do_default(token, cfg, skip_ids, args.force, args.moves_only)
+    return do_default(token, cfg, skip_ids, args.moves_only)
 
 
 if __name__ == "__main__":

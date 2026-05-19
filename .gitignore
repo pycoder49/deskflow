@@ -47,11 +47,12 @@ desktop.ini
 # Personal / session files
 notepad.md
 hot.md
-BUILD.md
+BUILD_NOTES.md
 LinkedIn.md
 projects.json
 os-config.json
 clickup-state.json
+task-stats.json
 
 # Downloaded ambient sounds (per-user; populated by scripts/download_sounds.py)
 static/sounds/

@@ -274,6 +274,11 @@ def main():
         state_file.write_text(json.dumps({"date": "1970-01-01"}), encoding="utf-8")
         print("[setup] clickup-state.json initialized")
 
+    logs_dir = PROJECT_ROOT / "logs"
+    if not logs_dir.exists():
+        logs_dir.mkdir()
+        print("[setup] logs/ directory created (dashboard spawn debug output)")
+
     # Download ambient sounds (skips files already present / unchanged).
     print("\n[+] Downloading ambient sounds (10-min snippets from YouTube)…")
     download_script = PROJECT_ROOT / "scripts" / "download_sounds.py"
@@ -288,14 +293,14 @@ def main():
 
 
 def maybe_seed_demo_stats() -> None:
-    """Write 14 days of random completion counts to ~/.claude/task-stats.json
+    """Write 14 days of random completion counts to <project_root>/task-stats.json
     if RANDOM_COMPLETIONS_ON_DOWNLOAD is True AND the file doesn't exist.
     Never overwrites existing data."""
     flag = env_value("RANDOM_COMPLETIONS_ON_DOWNLOAD", "True").strip().lower()
     if flag not in ("true", "1", "yes", "y"):
         return
 
-    stats_path = Path.home() / ".claude" / "task-stats.json"
+    stats_path = PROJECT_ROOT / "task-stats.json"
     if stats_path.exists():
         print(f"\n[+] {stats_path.name} already exists — skipping demo seed.")
         return

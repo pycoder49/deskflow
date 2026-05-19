@@ -31,7 +31,6 @@ The output is a single JSON object with this shape:
 ```json
 {
   "logical_today": "YYYY-MM-DD",
-  "already_moved_today": false,
   "stats": { "yesterday_count": 7, "backfilled_days": 0 },
   "calendar": [
     { "start_time": "09:00", "title": "Standup", "all_day": false },
@@ -79,10 +78,10 @@ python scripts/start_day.py --moves-only [--skip "id1,id2,id3"]
 Pass `--skip` with the comma-separated IDs of any tasks you decided to
 defer. Without `--skip`, every incomplete area task is moved.
 
-The move step is **gated to once per logical day** by the script's state
-file (`~/.claude/dashboard-state.json`). If the user already ran Start Day
-today, the script will skip the move and exit normally — that's fine,
-just report the situation.
+The Rust `start_day` command's `clickup-state.json` check is the single
+once-per-day gate — when invoked via the dashboard button, repeated clicks
+never reach this skill. Running this skill manually will always execute
+the moves; deduplicate via the `--skip` flag if needed.
 
 ### 4. Report
 
@@ -103,5 +102,3 @@ already; you're just providing the framing.
   invoke this separately.
 - Action logging (every move appended to the configured log destination)
   happens automatically inside the script via `scripts/log_action.py`.
-- Don't read or write `~/.claude/dashboard-state.json` yourself — the
-  script handles the gate.
