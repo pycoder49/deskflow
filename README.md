@@ -8,6 +8,16 @@ Designed to be personalized -- plug in your own ClickUp, calendar, and Claude ac
 
 ---
 
+<p align="center">
+  <img src="Images/SpaceDaily.jpg" width="49%" alt="Space theme – Day calendar view with embedded terminal" />
+  <img src="Images/VintageWeekly.jpg" width="49%" alt="Vintage theme – Week calendar view with Spotify" />
+</p>
+<p align="center">
+  <img src="Images/SlateMonthly.jpg" width="80%" alt="Slate theme – Month calendar view with Ambience visuals panel" />
+</p>
+
+---
+
 > ## ⚠ Claude billing change — June 15th 2026
 >
 > The `claude -p` subprocess this dashboard uses **stops being covered by Pro / Max subscriptions on June 15th 2026.** After that date you'll need an Anthropic API key (set `ANTHROPIC_API_KEY`). See [AI cost](#ai-cost) below for ways to reduce or disable it.
