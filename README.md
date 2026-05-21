@@ -78,7 +78,7 @@ Written by the setup wizard. Gitignored. Hand-editable.
     "daily_list_id": "...",
     "areas": [{ "list_id": "...", "label": "School", "slug": "school" }]
   },
-  "calendar": { "personal_email": "you@example.com" },
+  "calendar": { "personal_email": "you@example.com", "extra_calendars": [] },
   "commands": { "start_day_skill": "start-day" },
   "logging": {
     "mode": "local_file",
@@ -140,7 +140,7 @@ scripts/              Setup wizard, action logger, sound downloader
 
 **Now / Next won't load.** Run `claude -p "hi"`. If that fails, log into Claude Code (`claude` interactively first).
 
-**Calendar crashes on emoji (Windows).** Upgrade gcalcli: `pip install --upgrade gcalcli`.
+**Calendar crashes on emoji (Windows).** This is handled automatically — `PYTHONIOENCODING=utf-8` is set internally. If you still see encoding errors, make sure you're on the latest version of DeskFlow.
 
 **Spotify auth fails.** Redirect URI must be exactly `http://127.0.0.1:8888/callback` — no trailing slash, no `localhost`.
 
